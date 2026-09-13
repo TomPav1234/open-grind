@@ -33,6 +33,12 @@ async function watched() {
 	return installer;
 }
 
+function lastShownToast() {
+	const shown = toasts.showStage.mock.lastCall?.[0];
+	if (!shown) throw new Error("no stage toast was shown");
+	return shown;
+}
+
 async function downloaded(installer: { install: () => Promise<void> }) {
 	await installer.install();
 	readiness["google-oauth"] = ready("install");
@@ -40,7 +46,7 @@ async function downloaded(installer: { install: () => Promise<void> }) {
 	await settled();
 }
 
-describe("the add-on installer on the sign-in screen", () => {
+describe("the add-on installer in Settings → App", () => {
 	beforeEach(() => {
 		vi.resetModules();
 		vi.clearAllMocks();
@@ -292,6 +298,93 @@ describe("the add-on installer on the sign-in screen", () => {
 	});
 });
 
+describe("the add-on activity the sign-in screen observes", () => {
+	beforeEach(() => {
+		vi.resetModules();
+		vi.clearAllMocks();
+		fake.reset();
+		platform.isAndroidPlatform.mockReturnValue(true);
+		api.checkForUpdate.mockResolvedValue(offer("install"));
+	});
+
+	it("follows a toast-driven install from download to a counted install", async () => {
+		const { addonActivity, addonUpdates } = await import("./addon.svelte");
+		expect(addonActivity).toEqual({ stage: null, installs: 0 });
+
+		await addonUpdates.installNow();
+		expect(addonActivity.stage).toBe("downloading");
+		expect(toasts.showStage).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				view: expect.objectContaining({ stage: "downloading" }),
+			}),
+		);
+
+		readiness["google-oauth"] = ready("install");
+		emitProgress(
+			progressOf("google-oauth", { phase: "ready", received: 100 }),
+		);
+		await settled();
+		expect(addonActivity.stage).toBe("installing");
+
+		emitOutcome(outcomeOf("google-oauth"));
+		await settled();
+
+		expect(addonActivity).toEqual({ stage: null, installs: 1 });
+		expect(toasts.dismissStage).toHaveBeenCalledWith("google-oauth");
+		expect(toasts.showAddonInstalled).toHaveBeenCalledOnce();
+	});
+
+	it("does not count an install the user cancelled", async () => {
+		const { addonActivity, addonUpdates } = await import("./addon.svelte");
+		readiness["google-oauth"] = ready("install");
+
+		await addonUpdates.installNow();
+		expect(addonActivity.stage).toBe("installing");
+		emitOutcome(
+			outcomeOf("google-oauth", { succeeded: false, canceled: true }),
+		);
+		await settled();
+
+		expect(addonActivity).toEqual({ stage: "ready", installs: 0 });
+	});
+
+	it("clears the stage when the offer is swiped away, ignoring a stale swipe", async () => {
+		const { addonActivity, addonUpdates } = await import("./addon.svelte");
+		api.checkForUpdate.mockResolvedValue(offer("update"));
+		await addonUpdates.checkNow();
+		expect(addonActivity.stage).toBe("available");
+		const offered = lastShownToast();
+
+		api.checkForUpdate.mockResolvedValue(offer("install"));
+		await addonUpdates.installNow();
+		offered.onDismiss();
+		expect(addonActivity.stage).toBe("downloading");
+
+		lastShownToast().onDismiss();
+		expect(addonActivity.stage).toBeNull();
+	});
+
+	it("keeps observing the toast after the settings row lets go of the flow", async () => {
+		const { addonActivity } = await import("./addon.svelte");
+		const installer = await watched();
+		await installer.install();
+		expect(addonActivity.stage).toBeNull();
+
+		installer.unwatch();
+		expect(addonActivity.stage).toBe("downloading");
+
+		readiness["google-oauth"] = ready("install");
+		emitProgress(
+			progressOf("google-oauth", { phase: "ready", received: 100 }),
+		);
+		await settled();
+		emitOutcome(outcomeOf("google-oauth"));
+		await settled();
+
+		expect(addonActivity).toEqual({ stage: null, installs: 1 });
+	});
+});
+
 describe("the add-on button label", () => {
 	it("names each stage of a run", async () => {
 		const { addonStageLabel } = await import("./addon.svelte");
@@ -321,17 +414,5 @@ describe("the add-on button label", () => {
 				"Install",
 			);
 		}
-		expect(
-			addonStageLabel("idle", {
-				installed: false,
-				installLabel: "Install here",
-			}),
-		).toBe("Install here");
-		expect(
-			addonStageLabel("idle", {
-				installed: true,
-				installLabel: "Install here",
-			}),
-		).toBe("Check for update");
 	});
 });

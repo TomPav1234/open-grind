@@ -91,15 +91,15 @@ export async function androidAddon({
 	});
 
 	const permissionStep =
-		"once the download is verified the install-permission screen opens; allow it and come back, it continues by itself";
+		'once the download is verified the install-permission screen opens and the button reads "Install" again; allow it and come back, it continues by itself';
 	const steps =
 		addonMode === "install"
 			? [
 					'press "Get started", then "Sign in with Google"',
-					'tap "Install here"; the button walks through "Checking" and "Downloading" to "Installing"',
+					'tap "Install"; the button reads "Downloading…" while the toast shows the progress',
 					...(permitted ? [] : [permissionStep]),
-					"confirm Android's install dialog",
-					'the form says "Companion app installed"; cancelling the dialog leaves an "Install" button that asks again only when tapped',
+					'the button reads "Installing…"; confirm Android\'s install dialog',
+					`the toast reads "Companion app installed: ${tag}" and the card switches to "Continue"; cancelling the dialog leaves an "Install" button that asks again only when tapped`,
 				]
 			: [
 					'press "Get started" — the update checkbox is already on',

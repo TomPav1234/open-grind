@@ -37,7 +37,7 @@
 				[companionUnavailable]: () => void goto("/auth/sign-in/google"),
 				[companionUntrusted]: () => {
 					toast.error(untrustedCompanionMessage);
-					void goto("/auth/sign-in/google");
+					void goto("/auth/sign-in/google?paste");
 				},
 			},
 		},

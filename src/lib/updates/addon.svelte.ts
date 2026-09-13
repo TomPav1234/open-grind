@@ -1,7 +1,8 @@
 import { isAndroidPlatform } from "$lib/platform/os";
-import { type ComponentKey, GOOGLE_OAUTH_COMPONENT } from "./components";
+import { GOOGLE_OAUTH_COMPONENT } from "./components";
 import { type InstallKind, type StagePresenter, UpdateFlow } from "./flow";
 import { getInstalledVersion, updatesAvailableHere } from "./index";
+import type { UpdateStage } from "./stage";
 import { toastPresenter } from "./toast-presenter";
 
 export type AddonStage =
@@ -22,14 +23,11 @@ export function addonInstallerAvailable(): boolean {
 
 export function addonStageLabel(
 	stage: AddonStage,
-	{
-		installed,
-		installLabel = "Install",
-	}: { installed: boolean; installLabel?: string },
+	{ installed }: { installed: boolean },
 ): string {
 	switch (stage) {
 		case "available":
-			return installed ? "Update" : installLabel;
+			return installed ? "Update" : "Install";
 		case "checking":
 			return "Checking";
 		case "downloading":
@@ -45,13 +43,58 @@ export function addonStageLabel(
 		case "idle":
 		case "done":
 		case "upToDate":
-			return installed ? "Check for update" : installLabel;
+			return installed ? "Check for update" : "Install";
 	}
 }
 
+const activity = $state<{ stage: UpdateStage | null; installs: number }>({
+	stage: null,
+	installs: 0,
+});
+
+export const addonActivity = {
+	get stage(): UpdateStage | null {
+		return activity.stage;
+	},
+	get installs(): number {
+		return activity.installs;
+	},
+};
+
+function observed(presenter: StagePresenter): StagePresenter {
+	let showing = 0;
+	return {
+		show: (args) => {
+			const shown = ++showing;
+			activity.stage = args.view.stage;
+			presenter.show({
+				...args,
+				onDismiss: () => {
+					if (shown === showing) activity.stage = null;
+					args.onDismiss();
+				},
+			});
+		},
+		dismiss: () => {
+			showing++;
+			activity.stage = null;
+			presenter.dismiss();
+		},
+		problem: (title) => presenter.problem(title),
+		manualInstall: (body) => presenter.manualInstall(body),
+		installed: (args) => {
+			activity.installs++;
+			presenter.installed(args);
+		},
+		upToDate: () => presenter.upToDate(),
+	};
+}
+
+const addonToasts = observed(toastPresenter(GOOGLE_OAUTH_COMPONENT));
+
 export const addonUpdates = new UpdateFlow({
 	component: GOOGLE_OAUTH_COMPONENT,
-	presenter: toastPresenter(GOOGLE_OAUTH_COMPONENT),
+	presenter: addonToasts,
 });
 
 export async function startAddonUpdateWatch(): Promise<void> {
@@ -67,15 +110,11 @@ export class AddonInstaller {
 	installedVersion = $state<string | null | undefined>(undefined);
 	finishedKind = $state<InstallKind | null>(null);
 
-	readonly component: ComponentKey;
-	readonly #flow: UpdateFlow;
 	readonly #inline: StagePresenter;
 	#watching = false;
 	#versionReads = 0;
 
-	constructor(flow: UpdateFlow = addonUpdates) {
-		this.component = flow.component;
-		this.#flow = flow;
+	constructor() {
 		this.#inline = {
 			show: ({ view }) => {
 				this.received = view.received;
@@ -126,14 +165,14 @@ export class AddonInstaller {
 	watch(): void {
 		if (!addonInstallerAvailable() || this.#watching) return;
 		this.#watching = true;
-		this.#flow.present(this.#inline);
+		addonUpdates.present(this.#inline);
 		void this.#readInstalledVersion();
 	}
 
 	unwatch(): void {
 		if (!this.#watching) return;
 		this.#watching = false;
-		this.#flow.present(toastPresenter(this.component));
+		addonUpdates.present(addonToasts);
 	}
 
 	async install(): Promise<void> {
@@ -142,13 +181,13 @@ export class AddonInstaller {
 		this.message = null;
 		this.received = 0;
 		this.total = 0;
-		await this.#flow.installNow();
+		await addonUpdates.installNow();
 		if (this.stage === "checking") this.stage = "idle";
 	}
 
 	async #readInstalledVersion(): Promise<void> {
 		const read = ++this.#versionReads;
-		const version = await getInstalledVersion(this.component).catch(
+		const version = await getInstalledVersion(GOOGLE_OAUTH_COMPONENT).catch(
 			() => null,
 		);
 		if (read === this.#versionReads) this.installedVersion = version;

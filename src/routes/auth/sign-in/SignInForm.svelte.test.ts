@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { requestBlockedAlertState } from "$lib/api/request-blocked-state.svelte";
+import { untrustedCompanionMessage } from "$lib/api/sign-in";
 import SignInForm from "./SignInForm.svelte";
 
 const { callMethodMock, gotoMock, toastMock } = vi.hoisted(() => ({
@@ -131,6 +132,44 @@ describe("SignInForm", () => {
 
 		expect(toastMock.error).toHaveBeenCalledExactlyOnceWith(
 			"Something blocked the request before it reached Grindr",
+		);
+	});
+
+	it("sends a missing companion app to the Google sign-in screen", async () => {
+		callMethodMock.mockRejectedValue({
+			kind: "Auth",
+			message: "companion-unavailable",
+		});
+		render(SignInForm);
+
+		await fireEvent.click(
+			screen.getByRole("button", { name: "Sign in with Google" }),
+		);
+		await settle();
+
+		expect(gotoMock).toHaveBeenCalledExactlyOnceWith(
+			"/auth/sign-in/google",
+		);
+		expect(toastMock.error).not.toHaveBeenCalled();
+	});
+
+	it("sends an untrusted companion app straight to the pasted token", async () => {
+		callMethodMock.mockRejectedValue({
+			kind: "Auth",
+			message: "companion-untrusted",
+		});
+		render(SignInForm);
+
+		await fireEvent.click(
+			screen.getByRole("button", { name: "Sign in with Google" }),
+		);
+		await settle();
+
+		expect(toastMock.error).toHaveBeenCalledExactlyOnceWith(
+			untrustedCompanionMessage,
+		);
+		expect(gotoMock).toHaveBeenCalledExactlyOnceWith(
+			"/auth/sign-in/google?paste",
 		);
 	});
 

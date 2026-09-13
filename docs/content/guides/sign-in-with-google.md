@@ -19,9 +19,13 @@ Due to platform limitations enforced by Google, it's not possible to log in via 
 ### Open Grind Google OAuth app (recommended)
 
 1. Go to Open Grind sign in screen and tap "Sign in with Google"
-2. Tap "Install here" next to **Open Grind companion app**. Open Grind downloads the build matching your device and verifies its signature. The first time, Android asks you to allow Open Grind to install apps: turn the switch on and go back, and the install continues on its own. Then confirm Android's install prompt
-3. Tap "Retry"
-4. You should now have another screen opened with the same "Sign in with Google" button, tap it again and follow the instructions, no further setup needed. If you still see prompts to install the companion app and retrying in the Open Grind app does not help, see [Manual Google OAuth copy-paste](#manual-google-oauth-copy-paste-advanced) section below. If the install button shows "Try again", the message under it says what went wrong.
+2. Tap "Install". Open Grind downloads the build matching your device and verifies its signature. The progress shows at the top of the screen and keeps going if you leave the screen
+3. The first time, Android asks you to allow Open Grind to install apps: turn the switch on and go back, and the install continues on its own
+4. Confirm Android's install prompt
+5. Tap "Continue"
+6. You should now have another screen opened with the same "Sign in with Google" button, tap it again and follow the instructions, no further setup needed
+
+If you install the companion app another way while this screen is open, come back to Open Grind and the screen shows "Continue": tap it. If the install fails, the message at the top of the screen says what went wrong, and you can tap "Install" again. If it still does not work, tap "paste the OAuth token manually" under the card and follow [Manual Google OAuth copy-paste](#manual-google-oauth-copy-paste-advanced) below. To get back from the token form, tap "use the Open Grind Google OAuth app".
 
 Once the companion app is installed, you can check it for updates from Settings → App: automatically when "Check updates automatically" is on (on store-installed builds it reads "Check companion app updates automatically"), or anytime with "Check for update".
 
