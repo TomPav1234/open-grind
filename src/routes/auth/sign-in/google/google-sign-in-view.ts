@@ -28,8 +28,9 @@ export function installButton({
 }): { label: string; busy: boolean } {
 	switch (stage) {
 		case "downloading":
-		case "verifying":
 			return { label: "Downloading…", busy: true };
+		case "verifying":
+			return { label: "Verifying…", busy: true };
 		case "installing":
 			return { label: "Installing…", busy: true };
 		default:

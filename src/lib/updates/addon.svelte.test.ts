@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Capability } from "./types";
+import type { Capability, Readiness, Unsupported } from "./types";
 import {
 	offer,
 	outcomeOf,
 	progressOf,
 	ready,
+	resumable,
 	settled,
 	toastsFake,
 	updateApiFake,
@@ -38,6 +39,10 @@ async function probedCapability(capability: Capability) {
 	getUpdateCapability.mockResolvedValue(capability);
 	const { hydrateUpdateCapability } = await import("./capability.svelte");
 	await hydrateUpdateCapability();
+}
+
+function unsupported(detail: Unsupported): Readiness {
+	return { state: "unsupported", detail };
 }
 
 function lastShownToast() {
@@ -178,5 +183,47 @@ describe("where the companion app can be installed from here", () => {
 		const { addonInstallerAvailable } = await import("./addon.svelte");
 
 		expect(addonInstallerAvailable()).toBe(false);
+	});
+});
+
+describe("whether the companion app is published for this device", () => {
+	beforeEach(() => {
+		vi.resetModules();
+		vi.clearAllMocks();
+		fake.reset();
+	});
+
+	it("is not where its releases have no build for this device", async () => {
+		readiness["google-oauth"] = unsupported({
+			reason: "noReleaseArtifacts",
+			detail: { target: "android-x86" },
+		});
+		const { addonPublishedHere } = await import("./addon.svelte");
+
+		expect(await addonPublishedHere()).toBe(false);
+		expect(api.getUpdateReadiness).toHaveBeenCalledExactlyOnceWith(
+			"google-oauth",
+		);
+	});
+
+	it("is for every other answer, leaving the install to explain it", async () => {
+		const { addonPublishedHere } = await import("./addon.svelte");
+
+		for (const answer of [
+			{ state: "nothingStaged" },
+			resumable("install"),
+			unsupported({ reason: "foreignTarget" }),
+			unsupported({ reason: "undetermined" }),
+		] satisfies Readiness[]) {
+			readiness["google-oauth"] = answer;
+			expect(await addonPublishedHere()).toBe(true);
+		}
+	});
+
+	it("is when the readiness read fails", async () => {
+		api.getUpdateReadiness.mockRejectedValue(new Error("plugin gone"));
+		const { addonPublishedHere } = await import("./addon.svelte");
+
+		expect(await addonPublishedHere()).toBe(true);
 	});
 });

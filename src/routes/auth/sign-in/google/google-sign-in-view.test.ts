@@ -69,7 +69,7 @@ describe("an add-on stage the screen may withdraw", () => {
 });
 
 describe("the Install button", () => {
-	it("says what the add-on flow is doing while it downloads or installs", () => {
+	it("says what the add-on flow is doing while it downloads, verifies or installs", () => {
 		const during = (stage: UpdateStage) =>
 			installButton({ stage, starting: false });
 
@@ -78,7 +78,7 @@ describe("the Install button", () => {
 			busy: true,
 		});
 		expect(during("verifying")).toEqual({
-			label: "Downloading…",
+			label: "Verifying…",
 			busy: true,
 		});
 		expect(during("installing")).toEqual({

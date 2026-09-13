@@ -13,7 +13,7 @@
 		disabledCompanionMessage,
 		finishSignIn,
 		reportSignInFailure,
-		untrustedCompanionMessage,
+		untrustedCompanionCopy,
 	} from "$lib/api/sign-in";
 	import { Button } from "$lib/components/ui/button";
 	import * as Card from "$lib/components/ui/card";
@@ -40,7 +40,7 @@
 				[companionDisabled]: () =>
 					toast.error(disabledCompanionMessage),
 				[companionUntrusted]: () => {
-					toast.error(untrustedCompanionMessage);
+					toast.error(untrustedCompanionCopy());
 					void goto("/auth/sign-in/google?paste");
 				},
 			},

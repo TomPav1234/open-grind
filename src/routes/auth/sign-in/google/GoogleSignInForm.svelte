@@ -11,7 +11,7 @@
 		disabledCompanionMessage,
 		finishSignIn,
 		reportSignInFailure,
-		untrustedCompanionMessage,
+		untrustedCompanionCopy,
 	} from "$lib/api/sign-in";
 	import { Button } from "$lib/components/ui/button";
 	import * as Card from "$lib/components/ui/card";
@@ -25,6 +25,7 @@
 	import {
 		addonActivity,
 		addonInstallerAvailable,
+		addonPublishedHere,
 		addonUpdates,
 	} from "$lib/updates/addon.svelte";
 	import {
@@ -87,7 +88,10 @@
 		try {
 			if (!launchFailed && (await probeInstalled())) {
 				void continueInCompanion();
-			} else if (addonInstallerAvailable()) {
+			} else if (
+				addonInstallerAvailable() &&
+				(await addonPublishedHere())
+			) {
 				await addonUpdates.installNow();
 			} else {
 				openExternalLink(COMPANION_RELEASES);
@@ -118,7 +122,7 @@
 						return true;
 					}
 					if (message === companionUntrusted) {
-						toast.error(untrustedCompanionMessage);
+						toast.error(untrustedCompanionCopy());
 						pasting = true;
 						return true;
 					}

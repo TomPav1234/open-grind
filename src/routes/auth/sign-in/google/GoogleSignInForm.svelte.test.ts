@@ -10,7 +10,6 @@ import {
 	vi,
 } from "vitest";
 
-import { untrustedCompanionMessage } from "$lib/api/sign-in";
 import {
 	awaitingPermission,
 	offer,
@@ -160,6 +159,10 @@ describe("GoogleSignInForm", () => {
 		expectBusy("Downloading…");
 		expect(screen.queryByRole("progressbar")).toBeNull();
 
+		emitProgress(progressOf("google-oauth", { phase: "verifying" }));
+		await settled();
+		expectBusy("Verifying…");
+
 		readiness["google-oauth"] = ready("install");
 		emitProgress(
 			progressOf("google-oauth", { phase: "ready", received: 100 }),
@@ -267,6 +270,49 @@ describe("GoogleSignInForm", () => {
 		await settled();
 
 		expect(openExternalLink).toHaveBeenCalledWith(COMPANION_RELEASES);
+		expect(api.checkForUpdate).not.toHaveBeenCalled();
+	});
+
+	it("opens the release page on a device the companion app has no build for", async () => {
+		readiness["google-oauth"] = {
+			state: "unsupported",
+			detail: {
+				reason: "noReleaseArtifacts",
+				detail: { target: "android-x86" },
+			},
+		};
+		const { fireEvent } = await opened();
+
+		await fireEvent.click(button("Install"));
+		await settled();
+
+		expect(openExternalLink).toHaveBeenCalledExactlyOnceWith(
+			COMPANION_RELEASES,
+		);
+		expect(toasts.showProblem).not.toHaveBeenCalled();
+		expect(api.checkForUpdate).not.toHaveBeenCalled();
+		expect(api.startUpdateDownload).not.toHaveBeenCalled();
+		expect(button("Install")).toHaveProperty("disabled", false);
+
+		await fireEvent.click(button("Install"));
+		await settled();
+
+		expect(openExternalLink).toHaveBeenCalledTimes(2);
+		expect(toasts.showProblem).not.toHaveBeenCalled();
+	});
+
+	it("still explains an install this device refuses for another reason", async () => {
+		readiness["google-oauth"] = {
+			state: "unsupported",
+			detail: { reason: "foreignTarget" },
+		};
+		const { fireEvent } = await opened();
+
+		await fireEvent.click(button("Install"));
+		await settled();
+
+		expect(toasts.showProblem).toHaveBeenCalledOnce();
+		expect(openExternalLink).not.toHaveBeenCalled();
 		expect(api.checkForUpdate).not.toHaveBeenCalled();
 	});
 
@@ -417,6 +463,7 @@ describe("GoogleSignInForm", () => {
 	it("falls back to the pasted token when the companion app is untrusted", async () => {
 		api.getInstalledVersion.mockResolvedValue("1.1.0");
 		const { screen, fireEvent } = await opened();
+		const { untrustedCompanionMessage } = await import("$lib/api/sign-in");
 		callMethodMock.mockRejectedValue({
 			kind: "Auth",
 			message: "companion-untrusted",
@@ -427,6 +474,29 @@ describe("GoogleSignInForm", () => {
 
 		expect(toastMock.error).toHaveBeenCalledExactlyOnceWith(
 			untrustedCompanionMessage,
+		);
+		expect(screen.getByLabelText("Token")).toBeTruthy();
+	});
+
+	it("blames this build, not the companion app, when a build Open Grind didn't sign is refused", async () => {
+		getUpdateCapability.mockResolvedValue({
+			state: "unsupported",
+			detail: { reason: "foreignSigner" },
+		});
+		api.getInstalledVersion.mockResolvedValue("1.1.0");
+		const { screen, fireEvent } = await opened();
+		const { foreignBuildCompanionMessage } =
+			await import("$lib/api/sign-in");
+		callMethodMock.mockRejectedValue({
+			kind: "Auth",
+			message: "companion-untrusted",
+		});
+
+		await fireEvent.click(button("Continue"));
+		await settled();
+
+		expect(toastMock.error).toHaveBeenCalledExactlyOnceWith(
+			foreignBuildCompanionMessage,
 		);
 		expect(screen.getByLabelText("Token")).toBeTruthy();
 	});

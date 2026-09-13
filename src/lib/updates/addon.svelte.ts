@@ -2,7 +2,7 @@ import { isAndroidPlatform } from "$lib/platform/os";
 import { buildSignedByOpenGrind } from "./capability.svelte";
 import { GOOGLE_OAUTH_COMPONENT } from "./components";
 import { type StagePresenter, UpdateFlow } from "./flow";
-import { updatesAvailableHere } from "./index";
+import { getUpdateReadiness, updatesAvailableHere } from "./index";
 import type { UpdateStage } from "./stage";
 import { toastPresenter } from "./toast-presenter";
 
@@ -11,6 +11,16 @@ export function addonInstallerAvailable(): boolean {
 		updatesAvailableHere() &&
 		isAndroidPlatform() &&
 		buildSignedByOpenGrind()
+	);
+}
+
+export async function addonPublishedHere(): Promise<boolean> {
+	const readiness = await getUpdateReadiness(GOOGLE_OAUTH_COMPONENT).catch(
+		() => null,
+	);
+	return !(
+		readiness?.state === "unsupported" &&
+		readiness.detail.reason === "noReleaseArtifacts"
 	);
 }
 
