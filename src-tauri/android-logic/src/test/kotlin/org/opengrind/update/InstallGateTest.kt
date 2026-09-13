@@ -100,4 +100,9 @@ class InstallGateTest {
 	fun `downgrading to a lower version code is refused`() {
 		assertFalse(InstallGate.mayReplace(installedCode = 42L, archiveCode = 41L))
 	}
+
+	@Test
+	fun `a package that is not installed has nothing to downgrade`() {
+		assertTrue(InstallGate.mayReplace(installedCode = null, archiveCode = 1L))
+	}
 }

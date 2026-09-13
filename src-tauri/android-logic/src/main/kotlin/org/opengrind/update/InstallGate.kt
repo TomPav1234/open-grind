@@ -46,9 +46,9 @@ object InstallGate {
 		constantTimeEquals(fingerprint, RELEASE_CERT_SHA256)
 
 	fun mayReplace(
-		installedCode: Long,
+		installedCode: Long?,
 		archiveCode: Long,
-	): Boolean = archiveCode >= installedCode
+	): Boolean = installedCode == null || archiveCode >= installedCode
 
 	private fun constantTimeEquals(
 		left: String,

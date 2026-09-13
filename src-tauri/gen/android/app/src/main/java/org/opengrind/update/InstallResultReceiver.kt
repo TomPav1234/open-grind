@@ -16,18 +16,20 @@ class InstallResultReceiver : android.content.BroadcastReceiver() {
 		val packageManagerStatus =
 			intent.getIntExtra(hiddenPackageManagerStatusExtra, 0)
 		val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
-		val live = ApkInstaller.isLive(
-			intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1),
-		)
+		val sessionId = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
+		val live = ApkInstaller.isLive(sessionId)
+		val target = intent.getStringExtra(ApkInstaller.EXTRA_INSTALL_TARGET) ?: context.packageName
 
 		if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
 			if (live) confirmationIntent(intent)?.let(PendingConfirmation::offer)
 			return
 		}
-		UpdateLedger.record(context, status, packageManagerStatus, message)
+		if (ApkInstaller.replacesThisApp(context, target)) {
+			UpdateLedger.record(context, status, packageManagerStatus, message)
+		}
 		if (live) {
 			InstallEvents.deliver(
-				InstallStatus.outcomeOf(status, packageManagerStatus, message),
+				InstallStatus.outcomeOf(status, packageManagerStatus, message, target),
 			)
 		}
 	}
