@@ -1,3 +1,4 @@
+import { APP_COMPONENT, type ComponentKey } from "./components";
 import { asUpdateError, type Unsupported, type UpdateError } from "./types";
 
 const unsupportedCopy: Record<Unsupported["reason"], string> = {
@@ -23,7 +24,9 @@ export function unsupportedIsFixable(detail: Unsupported): boolean {
 	return userCanFix[detail.reason];
 }
 
-const copy: Record<Exclude<UpdateError["kind"], "unsupported">, string> = {
+type KnownKind = Exclude<UpdateError["kind"], "unsupported">;
+
+const copy: Record<KnownKind, string> = {
 	network: "Couldn't reach the release server",
 	server: "The release server refused the request",
 	malformedIndex: "The release server sent something unreadable",
@@ -41,16 +44,46 @@ const copy: Record<Exclude<UpdateError["kind"], "unsupported">, string> = {
 	install: "Couldn't install the update",
 	checkTooSoon: "Already checked for updates recently",
 	autoChecksDisabled: "Automatic update checks are turned off",
+	unknownComponent: "Open Grind doesn't know that component",
+	busy: "Another download is already running",
 };
 
-export function unsupportedText(detail: Unsupported): string {
-	return unsupportedCopy[detail.reason];
+const addonUnsupportedCopy: Partial<Record<Unsupported["reason"], string>> = {
+	externallyManaged:
+		"The store that installed the companion app manages its updates",
+	noReleaseArtifacts: "The companion app isn't published for this device",
+	undetermined:
+		"Open Grind can't tell whether it may install the companion app",
+};
+
+const addonCopy: Partial<Record<KnownKind, string>> = {
+	unsigned: "Failed to verify the companion app",
+	signature: "Failed to verify the companion app",
+	storage: "Couldn't save the companion app download",
+	install: "Couldn't install the companion app",
+	nothingStaged: "The companion app download is gone",
+};
+
+export function unsupportedText(
+	{ reason }: Unsupported | Pick<Unsupported, "reason">,
+	component: ComponentKey = APP_COMPONENT,
+): string {
+	const addonText =
+		component === APP_COMPONENT ? undefined : addonUnsupportedCopy[reason];
+	return addonText ?? unsupportedCopy[reason];
 }
 
-export function updateErrorText(error: unknown, fallback: string): string {
+export function updateErrorText(
+	error: unknown,
+	fallback: string,
+	component: ComponentKey = APP_COMPONENT,
+): string {
 	const known = asUpdateError(error);
 	if (!known) return fallback;
-	return known.kind === "unsupported"
-		? unsupportedText(known.detail)
-		: copy[known.kind];
+	if (known.kind === "unsupported") {
+		return unsupportedText(known.detail, component);
+	}
+	const addonText =
+		component === APP_COMPONENT ? undefined : addonCopy[known.kind];
+	return addonText ?? copy[known.kind];
 }

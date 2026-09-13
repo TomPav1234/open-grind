@@ -3,16 +3,22 @@
 	import DownloadSimpleIcon from "phosphor-svelte/lib/DownloadSimpleIcon";
 
 	import { Progress } from "$lib/components/ui/progress";
+	import { APP_COMPONENT, type ComponentKey } from "./components";
+	import type { InstallKind } from "./flow";
 	import type { UpdateStage } from "./stage";
 	import ToastCard from "./ToastCard.svelte";
 
 	let {
+		component = APP_COMPONENT,
+		kind,
 		stage,
 		received,
 		total,
 		onActivate,
 		onCancel,
 	}: {
+		component?: ComponentKey;
+		kind: InstallKind;
 		stage: UpdateStage;
 		received: number;
 		total: number;
@@ -20,39 +26,57 @@
 		onCancel: () => void;
 	} = $props();
 
-	const copy = $derived(
-		{
-			available: {
-				icon: DownloadSimpleIcon,
-				title: "New update available",
-				body: "Tap to install, swipe to dismiss",
-			},
-			downloading: {
-				icon: DownloadSimpleIcon,
-				title: "Downloading update…",
-				body: undefined,
-			},
-			verifying: {
-				icon: ArrowsClockwiseIcon,
-				title: "Verifying the update…",
-				body: undefined,
-			},
-			paused: {
-				icon: DownloadSimpleIcon,
-				title: "Update is available",
-				body: "Tap to download",
-			},
-			ready: {
-				icon: ArrowsClockwiseIcon,
-				title: "Update is downloaded",
-				body: "Tap to install",
-			},
-			installing: {
-				icon: ArrowsClockwiseIcon,
-				title: "Installing…",
-				body: undefined,
-			},
-		}[stage],
+	const looks = {
+		available: {
+			icon: DownloadSimpleIcon,
+			body: "Tap to install, swipe to dismiss",
+		},
+		downloading: { icon: DownloadSimpleIcon, body: undefined },
+		verifying: { icon: ArrowsClockwiseIcon, body: undefined },
+		paused: { icon: DownloadSimpleIcon, body: "Tap to download" },
+		ready: { icon: ArrowsClockwiseIcon, body: "Tap to install" },
+		installing: { icon: ArrowsClockwiseIcon, body: undefined },
+	} satisfies Record<UpdateStage, unknown>;
+
+	const addonUpdateTitles: Record<UpdateStage, string> = {
+		available: "Companion app update available",
+		downloading: "Downloading the companion app…",
+		verifying: "Verifying the companion app…",
+		paused: "Companion app update is available",
+		ready: "Companion app update is downloaded",
+		installing: "Installing the companion app…",
+	};
+
+	const titles: Record<
+		"app" | "addonUpdate" | "addonInstall",
+		Record<UpdateStage, string>
+	> = {
+		app: {
+			available: "New update available",
+			downloading: "Downloading update…",
+			verifying: "Verifying the update…",
+			paused: "Update is available",
+			ready: "Update is downloaded",
+			installing: "Installing…",
+		},
+		addonUpdate: addonUpdateTitles,
+		addonInstall: {
+			...addonUpdateTitles,
+			available: "Companion app is available",
+			paused: "Companion app is ready to download",
+			ready: "Companion app is downloaded",
+		},
+	};
+
+	const look = $derived(looks[stage]);
+	const title = $derived(
+		titles[
+			component === APP_COMPONENT
+				? "app"
+				: kind === "install"
+					? "addonInstall"
+					: "addonUpdate"
+		][stage],
 	);
 	const indeterminate = $derived(
 		stage === "installing" || stage === "verifying",
@@ -67,10 +91,10 @@
 </script>
 
 <ToastCard
-	icon={copy.icon}
-	title={copy.title}
-	body={copy.body}
-	onActivate={copy.body === undefined ? undefined : onActivate}
+	icon={look.icon}
+	{title}
+	body={look.body}
+	onActivate={look.body === undefined ? undefined : onActivate}
 	onCancel={stage === "downloading" ? onCancel : undefined}
 >
 	<Progress

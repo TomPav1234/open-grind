@@ -1,35 +1,33 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { StageView } from "./stage";
-import type { InstallOutcome, Progress, Readiness, UpdateError } from "./types";
+import type { Progress, UpdateError } from "./types";
+import {
+	offer,
+	progressOf,
+	ready,
+	resumable,
+	settled,
+	toastsFake,
+	updateApiFake,
+} from "./updates-test-helpers";
 
-const api = vi.hoisted(() => ({
-	asUpdateError: vi.fn((error: unknown) => error),
-	cancelUpdateDownload: vi.fn(),
-	checkForUpdate: vi.fn(),
-	discardStagedUpdate: vi.fn(),
-	getUpdateProgress: vi.fn(),
-	getUpdateReadiness: vi.fn(),
-	installUpdate: vi.fn(),
-	onInstallFinished: vi.fn(),
-	onUpdateProgress: vi.fn(),
-	openInstallPermissionSettings: vi.fn(),
-	startUpdateDownload: vi.fn(),
-	takeInstallOutcome: vi.fn(),
+const fake = updateApiFake();
+const toasts = toastsFake();
+const { api, readiness, emitProgress, emitOutcome } = fake;
+
+vi.mock("./index", async () => ({
+	...(await import("./types")),
+	...(await import("./components")),
+	...fake.api,
 }));
-
-const toasts = vi.hoisted(() => ({
-	dismissStage: vi.fn(),
-	showInstalled: vi.fn(),
-	showManualInstall: vi.fn(),
-	showProblem: vi.fn(),
-	showStage: vi.fn(),
-}));
-
-vi.mock("./index", () => api);
 vi.mock("./toasts", () => toasts);
 
 type Shown = { view: StageView; onActivate: () => void };
+
+const RELEASE_TAG = "v0.2.0";
+const nothingStaged = { state: "nothingStaged" } as const;
+const gone = { available: false, currentVersion: "0.1.0", release: null };
 
 function lastShown(): Shown {
 	const calls = toasts.showStage.mock.calls as [Shown][];
@@ -37,91 +35,56 @@ function lastShown(): Shown {
 	return calls[calls.length - 1]![0];
 }
 
-const ready: Readiness = {
-	state: "ready",
-	detail: { tag: "v0.2.0", version: "0.2.0", canInstallNow: true },
-};
-const release = {
-	available: true,
-	currentVersion: "0.1.0",
-	release: { tag: "v0.2.0", version: "0.2.0" },
-};
-
-async function settled(): Promise<void> {
-	for (let turn = 0; turn < 12; turn++) await Promise.resolve();
+function failure(detail: UpdateError): Progress {
+	return progressOf("app", {
+		tag: RELEASE_TAG,
+		version: RELEASE_TAG.slice(1),
+		phase: "failed",
+		detail,
+		total: 0,
+	});
 }
 
 function resetHarness(): void {
 	vi.resetModules();
 	vi.clearAllMocks();
-	api.asUpdateError.mockImplementation((error: unknown) => error);
-	api.discardStagedUpdate.mockResolvedValue(undefined);
-	api.getUpdateProgress.mockResolvedValue(null);
-	api.getUpdateReadiness.mockResolvedValue(ready);
-	api.installUpdate.mockResolvedValue(undefined);
-	api.startUpdateDownload.mockResolvedValue(undefined);
-	api.takeInstallOutcome.mockResolvedValue(null);
-	api.checkForUpdate.mockResolvedValue(release);
+	fake.reset();
+	readiness.app = ready("update", RELEASE_TAG);
+	api.checkForUpdate.mockResolvedValue(
+		offer("update", { component: "app", tag: RELEASE_TAG }),
+	);
 }
 
-function progressHandler(): (progress: Progress) => void {
-	const calls = api.onUpdateProgress.mock.calls as [
-		(progress: Progress) => void,
-	][];
-	expect(calls.length).toBeGreaterThan(0);
-	return calls[0]![0];
-}
-
-function installHandler(): (outcome: InstallOutcome) => void {
-	const calls = api.onInstallFinished.mock.calls as [
-		(outcome: InstallOutcome) => void,
-	][];
-	expect(calls.length).toBeGreaterThan(0);
-	return calls[0]![0];
-}
-
-function failure(detail: UpdateError): Progress {
-	return {
-		tag: "v0.2.0",
-		version: "0.2.0",
-		phase: "failed",
-		detail,
-		received: 0,
-		total: 0,
-	};
+async function startAppWatch(): Promise<void> {
+	const { startUpdateWatch } = await import("./updates-manager");
+	await startUpdateWatch();
 }
 
 describe("a staged update that vanished before the install", () => {
 	beforeEach(resetHarness);
 
 	it("downloads it again instead of reporting that nothing is staged", async () => {
-		const { startUpdateWatch } = await import("./updates-manager");
-		await startUpdateWatch();
+		await startAppWatch();
 		expect(lastShown().view.stage).toBe("ready");
 
 		api.installUpdate.mockRejectedValue({ kind: "nothingStaged" });
-		api.getUpdateReadiness.mockResolvedValue({ state: "nothingStaged" });
+		readiness.app = nothingStaged;
 
 		lastShown().onActivate();
 		await settled();
 
-		expect(api.checkForUpdate).toHaveBeenCalledWith("manual");
+		expect(api.checkForUpdate).toHaveBeenCalledWith("manual", "app");
 		expect(api.startUpdateDownload).toHaveBeenCalled();
 		expect(toasts.showProblem).not.toHaveBeenCalled();
 		expect(lastShown().view.stage).toBe("downloading");
 	});
 
 	it("clears the stale toast when the release is gone too", async () => {
-		const { startUpdateWatch } = await import("./updates-manager");
-		await startUpdateWatch();
+		await startAppWatch();
 
 		api.installUpdate.mockRejectedValue({ kind: "nothingStaged" });
-		api.getUpdateReadiness.mockResolvedValue({ state: "nothingStaged" });
-		api.checkForUpdate.mockResolvedValue({
-			available: false,
-			currentVersion: "0.1.0",
-			release: null,
-		});
+		readiness.app = nothingStaged;
+		api.checkForUpdate.mockResolvedValue(gone);
 
 		lastShown().onActivate();
 		await settled();
@@ -132,30 +95,28 @@ describe("a staged update that vanished before the install", () => {
 	});
 
 	it("re-checks and downloads again when the asset was replaced", async () => {
-		const { startUpdateWatch } = await import("./updates-manager");
-		await startUpdateWatch();
+		await startAppWatch();
 		api.startUpdateDownload.mockClear();
 		api.checkForUpdate.mockClear();
-		api.getUpdateReadiness.mockResolvedValue({ state: "nothingStaged" });
+		readiness.app = nothingStaged;
 
-		progressHandler()(failure({ kind: "assetReplaced" }));
+		emitProgress(failure({ kind: "assetReplaced" }));
 		await settled();
 
 		expect(toasts.showProblem).not.toHaveBeenCalled();
-		expect(api.checkForUpdate).toHaveBeenCalledWith("manual");
+		expect(api.checkForUpdate).toHaveBeenCalledWith("manual", "app");
 		expect(api.startUpdateDownload).toHaveBeenCalled();
 	});
 
 	it("stops re-downloading a replaced asset after one attempt", async () => {
-		const { startUpdateWatch } = await import("./updates-manager");
-		await startUpdateWatch();
-		api.getUpdateReadiness.mockResolvedValue({ state: "nothingStaged" });
+		await startAppWatch();
+		readiness.app = nothingStaged;
 
-		progressHandler()(failure({ kind: "assetReplaced" }));
+		emitProgress(failure({ kind: "assetReplaced" }));
 		await settled();
 		const afterFirst = api.startUpdateDownload.mock.calls.length;
 
-		progressHandler()(failure({ kind: "assetReplaced" }));
+		emitProgress(failure({ kind: "assetReplaced" }));
 		await settled();
 
 		expect(api.startUpdateDownload.mock.calls.length).toBe(afterFirst);
@@ -163,35 +124,23 @@ describe("a staged update that vanished before the install", () => {
 	});
 
 	it("drops a stage whose release is gone and still checks at launch", async () => {
-		api.getUpdateReadiness.mockResolvedValue({
-			state: "resumable",
-			detail: { tag: "v0.2.0", version: "0.2.0" },
-		});
+		readiness.app = resumable("update", RELEASE_TAG);
 		api.startUpdateDownload.mockRejectedValue({ kind: "nothingStaged" });
-		api.checkForUpdate.mockResolvedValue({
-			available: false,
-			currentVersion: "0.1.0",
-			release: null,
-		});
+		api.checkForUpdate.mockResolvedValue(gone);
 
-		const { startUpdateWatch } = await import("./updates-manager");
-		await startUpdateWatch();
+		await startAppWatch();
 		await settled();
 
 		expect(api.discardStagedUpdate).toHaveBeenCalled();
-		expect(api.checkForUpdate).toHaveBeenCalledWith("launch");
+		expect(api.checkForUpdate).toHaveBeenCalledWith("launch", "app");
 		expect(toasts.showProblem).not.toHaveBeenCalled();
 	});
 
 	it("resumes from disk when there is still something to resume", async () => {
-		const { startUpdateWatch } = await import("./updates-manager");
-		await startUpdateWatch();
+		await startAppWatch();
 
 		api.installUpdate.mockRejectedValue({ kind: "nothingStaged" });
-		api.getUpdateReadiness.mockResolvedValue({
-			state: "resumable",
-			detail: { tag: "v0.2.0", version: "0.2.0" },
-		});
+		readiness.app = resumable("update", RELEASE_TAG);
 
 		lastShown().onActivate();
 		await settled();
@@ -206,21 +155,32 @@ describe("a download the server refused", () => {
 	beforeEach(resetHarness);
 
 	it("discards the staged download after a 404", async () => {
-		const { startUpdateWatch } = await import("./updates-manager");
-		await startUpdateWatch();
+		await startAppWatch();
 
-		progressHandler()(failure({ kind: "server", detail: { status: 404 } }));
+		emitProgress(failure({ kind: "server", detail: { status: 404 } }));
 		await settled();
 
 		expect(toasts.showProblem).toHaveBeenCalled();
 		expect(api.discardStagedUpdate).toHaveBeenCalled();
 	});
 
-	it("keeps it after a 503 so it can resume", async () => {
-		const { startUpdateWatch } = await import("./updates-manager");
-		await startUpdateWatch();
+	it("ignores a failure that belongs to an add-on", async () => {
+		await startAppWatch();
 
-		progressHandler()(failure({ kind: "server", detail: { status: 503 } }));
+		emitProgress({
+			...failure({ kind: "server", detail: { status: 404 } }),
+			component: "google-oauth",
+		});
+		await settled();
+
+		expect(api.discardStagedUpdate).not.toHaveBeenCalled();
+		expect(toasts.showProblem).not.toHaveBeenCalled();
+	});
+
+	it("keeps it after a 503 so it can resume", async () => {
+		await startAppWatch();
+
+		emitProgress(failure({ kind: "server", detail: { status: 503 } }));
 		await settled();
 
 		expect(toasts.showProblem).toHaveBeenCalled();
@@ -228,10 +188,9 @@ describe("a download the server refused", () => {
 	});
 
 	it("keeps it after a connection drop", async () => {
-		const { startUpdateWatch } = await import("./updates-manager");
-		await startUpdateWatch();
+		await startAppWatch();
 
-		progressHandler()(failure({ kind: "network" }));
+		emitProgress(failure({ kind: "network" }));
 		await settled();
 
 		expect(toasts.showProblem).toHaveBeenCalled();
@@ -242,18 +201,37 @@ describe("a download the server refused", () => {
 describe("an install outcome delivered while the app is alive", () => {
 	beforeEach(resetHarness);
 
-	it("consumes the persisted copy so the failure toasts once", async () => {
-		const { startUpdateWatch } = await import("./updates-manager");
-		await startUpdateWatch();
+	it("toasts a live failure once and consumes its persisted copy", async () => {
+		await startAppWatch();
+		lastShown().onActivate();
+		await settled();
 		const consumed = api.takeInstallOutcome.mock.calls.length;
 
-		installHandler()({
+		emitOutcome({
 			succeeded: false,
 			canceled: false,
 			message: "The update did not install",
 		});
 		await settled();
 
+		expect(toasts.showProblem).toHaveBeenCalledTimes(1);
 		expect(api.takeInstallOutcome.mock.calls.length).toBe(consumed + 1);
+	});
+
+	it("ignores an install outcome that belongs to an add-on", async () => {
+		await startAppWatch();
+		api.takeInstallOutcome.mockClear();
+
+		emitOutcome({
+			packageName: "org.opengrind.google_oauth",
+			succeeded: false,
+			canceled: false,
+			code: 5,
+			message: "conflicts with the installed app",
+		});
+		await settled();
+
+		expect(api.takeInstallOutcome).not.toHaveBeenCalled();
+		expect(toasts.showProblem).not.toHaveBeenCalled();
 	});
 });
