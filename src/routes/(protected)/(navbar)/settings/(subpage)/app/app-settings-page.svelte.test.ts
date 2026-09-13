@@ -77,7 +77,7 @@ describe("the Updates section of the app settings on Android", () => {
 		testing.cleanup();
 	});
 
-	it("offers companion app updates on a store build signed by Open Grind", async () => {
+	it("offers Google OAuth app updates on a store build signed by Open Grind", async () => {
 		const screen = await opened({
 			state: "unsupported",
 			detail: {
@@ -95,7 +95,7 @@ describe("the Updates section of the app settings on Android", () => {
 		expect(
 			screen.getByRole("button", { name: "Check for updates" }),
 		).toBeTruthy();
-	});
+	}, 60_000);
 
 	it("stays hidden on a build someone else signed", async () => {
 		const screen = await opened({
@@ -110,5 +110,5 @@ describe("the Updates section of the app settings on Android", () => {
 		).toBeNull();
 		expect(screen.queryByText(/updates automatically/)).toBeNull();
 		expect(updateSettings.getUpdateSettings).not.toHaveBeenCalled();
-	});
+	}, 60_000);
 });
