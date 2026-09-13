@@ -12,7 +12,9 @@ import {
 	FilterPosition,
 	filterPositionSchema,
 	filterWeightSchema,
+	GENDER_ASK_ME,
 	gridSearchFiltersSchema,
+	isFilterableGender,
 	isFilterableTagKey,
 } from "$lib/model/browse/grid/filters";
 
@@ -53,6 +55,21 @@ describe("grid search filter schemas", () => {
 });
 
 describe("filterable values", () => {
+	const gender = {
+		genderId: 1,
+		gender: "Man",
+		displayGroup: 1,
+		sortFilter: 1,
+	};
+
+	it("offers only genders the official filter sheet lists", () => {
+		expect(isFilterableGender(gender)).toBe(true);
+		expect(isFilterableGender({ ...gender, sortFilter: null })).toBe(false);
+		expect(isFilterableGender({ ...gender, genderId: GENDER_ASK_ME })).toBe(
+			false,
+		);
+	});
+
 	it("hides the tags that moved to genders", () => {
 		expect(isFilterableTagKey("ftm")).toBe(false);
 		expect(isFilterableTagKey("mtf")).toBe(false);

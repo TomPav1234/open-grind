@@ -10,6 +10,7 @@ import {
 	SexualPosition,
 	Tribe,
 } from "$lib/model/users/profiles";
+import type { Gender } from "$lib/model/users/genders";
 
 export const filterIsFavoriteSchema = z.boolean();
 export const filterIsOnlineSchema = z.boolean();
@@ -31,6 +32,16 @@ export const filterGendersEnabledSchema = z.boolean().default(false);
 export const filterGendersSchema = z.array(
 	z.int().nonnegative().or(z.literal(-1)),
 );
+
+export const GENDER_ASK_ME = 62;
+
+export const isFilterableGenderId = (id: number) => id !== GENDER_ASK_ME;
+
+export const isFilterableGender = (
+	gender: Gender,
+): gender is Gender & { sortFilter: number } =>
+	typeof gender.sortFilter === "number" &&
+	isFilterableGenderId(gender.genderId);
 
 export const filterTagsEnabledSchema = z.boolean();
 export const filterTagsSchema = z.array(z.string());

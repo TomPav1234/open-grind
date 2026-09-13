@@ -2,6 +2,7 @@ import type z from "zod";
 
 import {
 	type GridSearchFilters,
+	isFilterableGenderId,
 	isFilterableTribe,
 	WEIGHT_KG_MAX,
 	WEIGHT_KG_MIN,
@@ -30,6 +31,7 @@ export function sentFilterKeys(
 }
 
 function cascadeFilters(filters: GridSearchFilters): CascadeFilters {
+	const genders = filters.genders.filter(isFilterableGenderId);
 	const tribes = filters.tribes.filter(isFilterableTribe);
 	return {
 		favorites: filters.isFavorite || undefined,
@@ -39,7 +41,7 @@ function cascadeFilters(filters: GridSearchFilters): CascadeFilters {
 			ageMin: filters.age[0],
 			ageMax: filters.age[1],
 		}),
-		...(filters.genderEnabled && { genders: filters.genders }),
+		...(filters.genderEnabled && genders.length > 0 && { genders }),
 		...(filters.positionEnabled && { sexualPositions: filters.positions }),
 		...(filters.photosEnabled &&
 			filters.photos.includes("has-photos") && { photoOnly: true }),

@@ -1,12 +1,38 @@
 import { describe, expect, it } from "vitest";
 
-import { defaultFilters } from "$lib/model/browse/grid/filters";
+import { defaultFilters, GENDER_ASK_ME } from "$lib/model/browse/grid/filters";
 import { Tribe } from "$lib/model/users/profiles";
 import { buildCascadeQuery, sentFilterKeys } from "./grid-query";
 
 const geohash = "u33dc0";
 
 describe("buildCascadeQuery", () => {
+	it("never sends the Ask me gender", () => {
+		const query = buildCascadeQuery({
+			geohash,
+			filters: {
+				...defaultFilters,
+				genderEnabled: true,
+				genders: [1, GENDER_ASK_ME],
+			},
+		});
+
+		expect(query.genders).toEqual([1]);
+	});
+
+	it("leaves genders out when only Ask me is selected", () => {
+		const query = buildCascadeQuery({
+			geohash,
+			filters: {
+				...defaultFilters,
+				genderEnabled: true,
+				genders: [GENDER_ASK_ME],
+			},
+		});
+
+		expect(query).not.toHaveProperty("genders");
+	});
+
 	it("never sends the Trans tribe, which moved to genders", () => {
 		const query = buildCascadeQuery({
 			geohash,

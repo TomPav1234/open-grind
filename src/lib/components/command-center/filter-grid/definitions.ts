@@ -14,6 +14,7 @@ import {
 	type GridSearchFilters,
 	HEIGHT_CM_MAX,
 	HEIGHT_CM_MIN,
+	isFilterableGenderId,
 	isFilterableTribe,
 	WEIGHT_KG_MAX,
 	WEIGHT_KG_MIN,
@@ -329,7 +330,8 @@ export const filters: Filter[] = [
 				apply: idListApply({
 					target: "genders",
 					enabled: "genderEnabled",
-					isValid: (id) => id === -1 || id >= 0,
+					isValid: (id) =>
+						id === -1 || (id >= 0 && isFilterableGenderId(id)),
 					invalidLabel: "Invalid gender ID",
 				}),
 			},
