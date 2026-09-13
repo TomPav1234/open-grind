@@ -8,6 +8,7 @@
 	import * as ToggleGroup from "$lib/components/ui/toggle-group";
 	import { isFilterableGender } from "$lib/model/browse/grid/filters";
 	import FilterBoolean from "./FilterBoolean.svelte";
+	import { isGenderChipShown, selectGenders } from "./gender-chips";
 
 	let {
 		checked = $bindable(),
@@ -48,21 +49,26 @@
 				class="w-full flex-wrap gap-1"
 				bind:value={
 					() => value.map(String),
-					(v: string[]) => (
-						(checked = v.length > 0),
-						(value = v.map(Number))
-					)
+					(next: string[]) => {
+						value = selectGenders({
+							genders,
+							previous: value,
+							next: next.map(Number),
+						});
+						checked = value.length > 0;
+					}
 				}
 			>
-				{#each genders as { genderId, gender, excludeOnFilterSelection: excludeList, genderPlural, displayGroup } (genderId)}
-					{@const render =
-						!excludeList ||
-						(!value.some((v) => excludeList.includes(v)) &&
-							(expanded || displayGroup === 1))}
-					{#if render}
+				{#each genders as gender (gender.genderId)}
+					{@const shown = isGenderChipShown({
+						gender,
+						selected: value,
+						expanded,
+					})}
+					{#if shown}
 						<div transition:hide class="overflow-clip">
-							<ToggleGroup.Item value={String(genderId)}>
-								{genderPlural ?? gender}
+							<ToggleGroup.Item value={String(gender.genderId)}>
+								{gender.genderPlural ?? gender.gender}
 							</ToggleGroup.Item>
 						</div>
 					{/if}
