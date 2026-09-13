@@ -67,7 +67,6 @@ describe("a staged update that vanished before the install", () => {
 		await startAppWatch();
 		expect(lastShown().view.stage).toBe("ready");
 
-		api.installUpdate.mockRejectedValue({ kind: "nothingStaged" });
 		readiness.app = nothingStaged;
 
 		lastShown().onActivate();
@@ -79,10 +78,27 @@ describe("a staged update that vanished before the install", () => {
 		expect(lastShown().view.stage).toBe("downloading");
 	});
 
+	it("downloads it again when it vanishes as the install starts", async () => {
+		await startAppWatch();
+		api.getUpdateReadiness.mockResolvedValueOnce(
+			ready("update", RELEASE_TAG),
+		);
+		readiness.app = nothingStaged;
+		api.installUpdate.mockRejectedValue({ kind: "nothingStaged" });
+
+		lastShown().onActivate();
+		await settled();
+
+		expect(api.installUpdate).toHaveBeenCalledOnce();
+		expect(api.checkForUpdate).toHaveBeenCalledWith("manual", "app");
+		expect(api.startUpdateDownload).toHaveBeenCalled();
+		expect(toasts.showProblem).not.toHaveBeenCalled();
+		expect(lastShown().view.stage).toBe("downloading");
+	});
+
 	it("clears the stale toast when the release is gone too", async () => {
 		await startAppWatch();
 
-		api.installUpdate.mockRejectedValue({ kind: "nothingStaged" });
 		readiness.app = nothingStaged;
 		api.checkForUpdate.mockResolvedValue(gone);
 
@@ -139,7 +155,6 @@ describe("a staged update that vanished before the install", () => {
 	it("resumes from disk when there is still something to resume", async () => {
 		await startAppWatch();
 
-		api.installUpdate.mockRejectedValue({ kind: "nothingStaged" });
 		readiness.app = resumable("update", RELEASE_TAG);
 
 		lastShown().onActivate();

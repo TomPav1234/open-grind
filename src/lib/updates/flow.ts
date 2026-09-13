@@ -9,6 +9,7 @@ import {
 	cancelUpdateDownload,
 	checkForUpdate,
 	discardStagedUpdate,
+	getInstalledVersion,
 	getUpdateProgress,
 	getUpdateReadiness,
 	installPending,
@@ -24,6 +25,9 @@ import type { CheckResult, InstallOutcome, Release } from "./types";
 
 export type Trigger = "launch" | "manual" | "automatic";
 export type InstallKind = Release["kind"];
+export type CheckReport = "offered" | "current" | "busy" | "failed";
+export type CheckOptions = { reportFailure?: boolean };
+type FailureReport = "all" | "unsigned" | "none";
 
 export type StagePresenter = {
 	show(args: {
@@ -50,7 +54,7 @@ let permissionOwner: ComponentKey | null = null;
 
 export class UpdateFlow {
 	readonly component: ComponentKey;
-	#presenter: StagePresenter;
+	readonly #presenter: StagePresenter;
 	#shown: StageView = { stage: "available", ...fromScratch };
 	#visible = false;
 	#installedFrom: StageView | null = null;
@@ -91,16 +95,6 @@ export class UpdateFlow {
 		);
 	}
 
-	present(presenter: StagePresenter): void {
-		if (presenter === this.#presenter) return;
-		if (this.#visible) {
-			this.#showing++;
-			this.#presenter.dismiss();
-		}
-		this.#presenter = presenter;
-		if (this.#visible) this.#show(this.#shown);
-	}
-
 	async start(): Promise<void> {
 		if (this.#started) return;
 		this.#started = true;
@@ -125,9 +119,27 @@ export class UpdateFlow {
 		await this.#offerCheck("launch");
 	}
 
-	async checkNow(): Promise<void> {
+	async checkNow({
+		reportFailure = false,
+	}: CheckOptions = {}): Promise<CheckReport> {
 		this.#follow();
-		await this.#backgroundCheck("manual");
+		if (this.#installedFrom || this.#visible) return "busy";
+		const result = await this.#check("manual", {
+			report: reportFailure ? "all" : "none",
+		});
+		if (!result) return "failed";
+		if (this.#installedFrom || this.#visible) return "busy";
+		return this.#offer(result) ? "offered" : "current";
+	}
+
+	async withdrawUpdate(): Promise<void> {
+		const withdrawable =
+			this.#visible &&
+			!this.#installedFrom &&
+			this.#readyKind === "update";
+		if (!withdrawable) return;
+		this.#dismissed = true;
+		await this.#dropStage();
 	}
 
 	async installNow(): Promise<void> {
@@ -139,7 +151,6 @@ export class UpdateFlow {
 		);
 		switch (readiness?.state) {
 			case "ready":
-				this.#canInstallNow = readiness.detail.canInstallNow;
 				this.#readyTag = readiness.detail.tag;
 				this.#readyKind = readiness.detail.kind;
 				this.#show({ stage: "ready", received: 1, total: 1 });
@@ -162,7 +173,7 @@ export class UpdateFlow {
 				return;
 		}
 
-		const result = await this.#check("manual", { byUser: true });
+		const result = await this.#check("manual", { report: "all" });
 		if (!result) return;
 		if (!result.available || !result.release) {
 			if (result.currentVersion === null) {
@@ -220,8 +231,7 @@ export class UpdateFlow {
 				return true;
 			}
 			this.#armedTag = null;
-			await discardStagedUpdate(this.component).catch(() => undefined);
-			this.#hide();
+			await this.#dropStage();
 			return false;
 		}
 	}
@@ -236,10 +246,21 @@ export class UpdateFlow {
 				this.#presenter.problem("Finish the other install first");
 				return;
 			}
-			if (!this.#canInstallNow) {
-				this.#canInstallNow = await this.#permittedToInstall();
+			const readiness = await getUpdateReadiness(this.component);
+			if (readiness.state === "unsupported") {
+				this.#releaseInstall();
+				this.#hide();
+				this.#presenter.problem(
+					unsupportedText(readiness.detail, this.component),
+				);
+				return;
 			}
-			if (!this.#canInstallNow) {
+			if (readiness.state !== "ready") {
+				this.#releaseInstall();
+				await this.#downloadAgain();
+				return;
+			}
+			if (!readiness.detail.canInstallNow) {
 				this.#releaseInstall();
 				await this.#requestInstallPermission();
 				return;
@@ -253,13 +274,14 @@ export class UpdateFlow {
 			this.#show(ready);
 			switch (asUpdateError(error)?.kind) {
 				case "needsUnknownSources":
-					this.#canInstallNow = false;
 					await this.#requestInstallPermission();
 					return;
 				case "needsManualInstall":
 					this.#hide();
 					this.#presenter.manualInstall(
-						updateErrorText(error, "Drag it onto Applications"),
+						updateErrorText(error, {
+							fallback: "Drag it onto Applications",
+						}),
 					);
 					return;
 				case "nothingStaged":
@@ -294,11 +316,17 @@ export class UpdateFlow {
 		void this.#settle();
 	}
 
-	async #permittedToInstall(): Promise<boolean> {
-		const readiness = await getUpdateReadiness(this.component).catch(
-			() => null,
+	async #stillInstalled(): Promise<boolean> {
+		if (this.component === APP_COMPONENT) return true;
+		return getInstalledVersion(this.component).then(
+			(version) => version !== null,
+			() => true,
 		);
-		return readiness?.state === "ready" && readiness.detail.canInstallNow;
+	}
+
+	async #dropStage(): Promise<void> {
+		await discardStagedUpdate(this.component).catch(() => undefined);
+		this.#hide();
 	}
 
 	#releaseInstall(): void {
@@ -324,8 +352,8 @@ export class UpdateFlow {
 			document.removeEventListener("visibilitychange", resume);
 			if (permissionOwner !== this.component) return;
 			permissionOwner = null;
-			void this.#settle().then(() => {
-				if (this.#canInstallNow) void this.#install();
+			void this.#settleOrHide().then((usable) => {
+				if (usable && this.#canInstallNow) void this.#install();
 			});
 		};
 		document.addEventListener("visibilitychange", resume);
@@ -333,10 +361,13 @@ export class UpdateFlow {
 
 	async #downloadAgain(): Promise<void> {
 		if (await this.#settle()) return;
-		await this.#offerCheck("manual", {
-			acceptInstall:
-				this.#armedTag !== null || this.#readyKind === "install",
-		});
+		const acceptInstall =
+			this.#armedTag !== null || this.#readyKind === "install";
+		if (!acceptInstall && !(await this.#stillInstalled())) {
+			await this.#dropStage();
+			return;
+		}
+		await this.#offerCheck("manual", { acceptInstall });
 		if (this.#shown.stage === "available") {
 			await this.#download(fromScratch);
 			return;
@@ -375,24 +406,39 @@ export class UpdateFlow {
 		return this.#settling;
 	}
 
-	async #backgroundCheck(trigger: Trigger): Promise<void> {
+	async #settleOrHide(): Promise<boolean> {
+		const usable = await this.#settle();
+		if (!usable && this.#visible) this.#hide();
+		return usable;
+	}
+
+	get #offerReplaceable(): boolean {
 		const { stage } = this.#shown;
 		const offerOnScreen = stage === "available" || stage === "paused";
-		if (this.#installedFrom || (this.#visible && !offerOnScreen)) return;
-		await this.#offerCheck(trigger);
+		return !this.#installedFrom && (!this.#visible || offerOnScreen);
+	}
+
+	async #backgroundCheck(trigger: Trigger): Promise<void> {
+		if (!this.#offerReplaceable) return;
+		const result = await this.#check(trigger);
+		if (!result || !this.#offerReplaceable || this.#offer(result)) return;
+		if (this.#visible) this.#hide();
 	}
 
 	async #check(
 		trigger: Trigger,
-		{ byUser = false }: { byUser?: boolean } = {},
+		{ report = "unsigned" }: { report?: FailureReport } = {},
 	): Promise<CheckResult | null> {
 		return checkForUpdate(trigger, this.component).catch(
 			(error: unknown) => {
-				if (byUser) {
+				if (report === "all") {
 					this.#presenter.problem(
 						this.#text(error, "Couldn't check for updates"),
 					);
-				} else if (asUpdateError(error)?.kind === "unsigned") {
+				} else if (
+					report === "unsigned" &&
+					asUpdateError(error)?.kind === "unsigned"
+				) {
 					this.#reportFailure(error);
 				}
 				return null;
@@ -405,11 +451,19 @@ export class UpdateFlow {
 		{ acceptInstall = false }: { acceptInstall?: boolean } = {},
 	): Promise<void> {
 		const result = await this.#check(trigger);
-		if (!result?.available || !result.release) return;
-		if (result.release.kind !== "update" && !acceptInstall) return;
-		this.#readyKind = result.release.kind;
+		if (result) this.#offer(result, { acceptInstall });
+	}
+
+	#offer(
+		{ available, release }: CheckResult,
+		{ acceptInstall = false }: { acceptInstall?: boolean } = {},
+	): boolean {
+		if (!available || !release) return false;
+		if (release.kind !== "update" && !acceptInstall) return false;
+		this.#readyKind = release.kind;
 		this.#dismissed = false;
 		this.#show({ stage: "available", ...fromScratch });
+		return true;
 	}
 
 	#ownsOutcome({ packageName }: InstallOutcome): boolean {
@@ -469,8 +523,8 @@ export class UpdateFlow {
 			const armed = this.#armedTag === progress.tag;
 			if (armed) this.#armedTag = null;
 			if (this.#installing) return;
-			void this.#settle().then(() => {
-				if (armed) void this.#install();
+			void this.#settleOrHide().then((usable) => {
+				if (usable && armed) void this.#install();
 			});
 		});
 	}
@@ -525,7 +579,11 @@ export class UpdateFlow {
 	}
 
 	#text(error: unknown, fallback: string): string {
-		return updateErrorText(error, fallback, this.component);
+		return updateErrorText(error, {
+			fallback,
+			component: this.component,
+			kind: this.#readyKind,
+		});
 	}
 
 	#reportFailure(error: unknown): void {

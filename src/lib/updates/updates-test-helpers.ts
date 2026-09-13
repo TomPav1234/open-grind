@@ -184,11 +184,11 @@ export function toastsFake() {
 	return {
 		dismissStage: vi.fn<typeof Toasts.dismissStage>(),
 		showAddonInstalled: vi.fn<typeof Toasts.showAddonInstalled>(),
-		showAddonUpToDate: vi.fn<typeof Toasts.showAddonUpToDate>(),
 		showInstalled: vi.fn<typeof Toasts.showInstalled>(),
 		showManualInstall: vi.fn<typeof Toasts.showManualInstall>(),
 		showProblem: vi.fn<typeof Toasts.showProblem>(),
 		showStage: vi.fn<typeof Toasts.showStage>(),
+		showUpToDate: vi.fn<typeof Toasts.showUpToDate>(),
 	};
 }
 

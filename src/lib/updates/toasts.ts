@@ -1,6 +1,7 @@
 import { getVersion } from "@tauri-apps/api/app";
 import CheckCircleIcon from "phosphor-svelte/lib/CheckCircleIcon";
 import FolderOpenIcon from "phosphor-svelte/lib/FolderOpenIcon";
+import InfoIcon from "phosphor-svelte/lib/InfoIcon";
 import SealWarningIcon from "phosphor-svelte/lib/SealWarningIcon";
 import { toast } from "svelte-sonner";
 
@@ -19,6 +20,7 @@ const RELEASES: Record<ComponentKey, string> = {
 		"https://git.opengrind.org/open-grind/open-grind-google-oauth-android-app/releases/tag",
 };
 const INSTALLED_TOAST = "update-installed";
+const CHECK_RESULT_TOAST = "update-check-result";
 
 function stageToast(component: ComponentKey): string {
 	return component === APP_COMPONENT ? "update" : `update:${component}`;
@@ -133,14 +135,26 @@ export function showAddonInstalled({
 	});
 }
 
-export function showAddonUpToDate(): void {
+function showCheckResult({
+	icon,
+	title,
+}: {
+	icon: typeof CheckCircleIcon;
+	title: string;
+}): void {
 	toast.custom(ToastCard, {
 		...PLACEMENT,
+		id: CHECK_RESULT_TOAST,
 		duration: 4000,
 		class: CARD_CLASS,
-		componentProps: {
-			icon: CheckCircleIcon,
-			title: "The companion app is up to date",
-		},
+		componentProps: { icon, title },
 	});
+}
+
+export function showUpToDate(title: string): void {
+	showCheckResult({ icon: CheckCircleIcon, title });
+}
+
+export function showNotice(title: string): void {
+	showCheckResult({ icon: InfoIcon, title });
 }

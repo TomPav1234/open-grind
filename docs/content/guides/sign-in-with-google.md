@@ -27,7 +27,7 @@ Due to platform limitations enforced by Google, it's not possible to log in via 
 
 If you install the companion app another way while this screen is open, come back to Open Grind and the screen shows "Continue": tap it. If the install fails, the message at the top of the screen says what went wrong, and you can tap "Install" again. If it still does not work, tap "paste the OAuth token manually" under the card and follow [Manual Google OAuth copy-paste](#manual-google-oauth-copy-paste-advanced) below. To get back from the token form, tap "use the Open Grind Google OAuth app".
 
-Once the companion app is installed, you can check it for updates from Settings → App: automatically when "Check updates automatically" is on (on store-installed builds it reads "Check companion app updates automatically"), or anytime with "Check for update".
+Once the companion app is installed, you can check it for updates from Settings → App: automatically when "Check updates automatically" is on (on store-installed builds it reads "Check add-on updates automatically"), or anytime with "Check for updates".
 
 To install it yourself instead, download the build for your device's CPU architecture from the [companion app's Releases page](https://git.opengrind.org/open-grind/open-grind-google-oauth-android-app/releases) — 98% of devices today support arm64-v8a, so **try arm64-v8a.apk first**.
 

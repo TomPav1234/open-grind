@@ -3,11 +3,11 @@ import type { StagePresenter } from "./flow";
 import {
 	dismissStage,
 	showAddonInstalled,
-	showAddonUpToDate,
 	showInstalled,
 	showManualInstall,
 	showProblem,
 	showStage,
+	showUpToDate,
 } from "./toasts";
 
 export function toastPresenter(component: ComponentKey): StagePresenter {
@@ -24,6 +24,6 @@ export function toastPresenter(component: ComponentKey): StagePresenter {
 			if (component === APP_COMPONENT) void showInstalled();
 			else showAddonInstalled({ component, tag, kind });
 		},
-		upToDate: () => showAddonUpToDate(),
+		upToDate: () => showUpToDate("The companion app is up to date"),
 	};
 }

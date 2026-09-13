@@ -1,5 +1,10 @@
 import { APP_COMPONENT, type ComponentKey } from "./components";
-import { asUpdateError, type Unsupported, type UpdateError } from "./types";
+import {
+	asUpdateError,
+	type Release,
+	type Unsupported,
+	type UpdateError,
+} from "./types";
 
 const unsupportedCopy: Record<Unsupported["reason"], string> = {
 	externallyManaged:
@@ -64,6 +69,10 @@ const addonCopy: Partial<Record<KnownKind, string>> = {
 	nothingStaged: "The companion app download is gone",
 };
 
+const addonUpdateCopy: Partial<Record<KnownKind, string>> = {
+	install: "Couldn't update the companion app",
+};
+
 export function unsupportedText(
 	{ reason }: Unsupported | Pick<Unsupported, "reason">,
 	component: ComponentKey = APP_COMPONENT,
@@ -75,15 +84,19 @@ export function unsupportedText(
 
 export function updateErrorText(
 	error: unknown,
-	fallback: string,
-	component: ComponentKey = APP_COMPONENT,
+	{
+		fallback,
+		component = APP_COMPONENT,
+		kind = "install",
+	}: { fallback: string; component?: ComponentKey; kind?: Release["kind"] },
 ): string {
 	const known = asUpdateError(error);
 	if (!known) return fallback;
 	if (known.kind === "unsupported") {
 		return unsupportedText(known.detail, component);
 	}
-	const addonText =
-		component === APP_COMPONENT ? undefined : addonCopy[known.kind];
-	return addonText ?? copy[known.kind];
+	if (component === APP_COMPONENT) return copy[known.kind];
+	const updateText =
+		kind === "update" ? addonUpdateCopy[known.kind] : undefined;
+	return updateText ?? addonCopy[known.kind] ?? copy[known.kind];
 }

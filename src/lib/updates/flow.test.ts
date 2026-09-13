@@ -1,17 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ComponentKey } from "./components";
+import type { InstallKind } from "./flow";
+import type { CheckResult } from "./types";
 import {
+	awaitingPermission,
 	flowFor,
 	offer,
 	outcomeOf,
 	progressOf,
 	ready,
-	recorder,
 	resumable,
 	settled,
 	unpublished,
 	updateApiFake,
+	upToDate,
 } from "./updates-test-helpers";
 
 const fake = updateApiFake();
@@ -49,37 +52,6 @@ describe("an add-on update flow", () => {
 		expect(view.events).toEqual([]);
 	});
 
-	it("keeps an offer the sign-in screen borrowed and gave back", async () => {
-		api.checkForUpdate.mockResolvedValue(offer("update"));
-		const { flow, view } = await flowFor("google-oauth");
-		await flow.start();
-		const inline = recorder();
-
-		flow.present(inline.presenter);
-		await settled();
-		flow.present(view.presenter);
-		await settled();
-
-		expect(inline.events).toEqual(["show:available", "dismiss"]);
-		expect(view.events.at(-1)).toBe("show:available");
-	});
-
-	it("still honours a swipe on the offer", async () => {
-		api.checkForUpdate.mockResolvedValue(offer("update"));
-		const { flow, view } = await flowFor("google-oauth");
-		await flow.start();
-		view.swipe();
-		const shows = view.events.length;
-		const inline = recorder();
-
-		flow.present(inline.presenter);
-		flow.present(view.presenter);
-		await settled();
-
-		expect(inline.events).toEqual([]);
-		expect(view.events.length).toBe(shows);
-	});
-
 	it("leaves a first-install download to the sign-in screen at launch", async () => {
 		readiness["google-oauth"] = ready("install");
 		const { flow, view } = await flowFor("google-oauth");
@@ -110,21 +82,6 @@ describe("an add-on update flow", () => {
 		await flow.start();
 
 		expect(view.events).toEqual([]);
-	});
-
-	it("stops instead of reinstalling when the add-on was removed before the install", async () => {
-		readiness["google-oauth"] = ready("update");
-		const { flow, view } = await flowFor("google-oauth");
-		await flow.start();
-
-		api.installUpdate.mockRejectedValue({ kind: "nothingStaged" });
-		readiness["google-oauth"] = { state: "nothingStaged" };
-		api.checkForUpdate.mockResolvedValue(offer("install"));
-		view.activate();
-		await settled();
-
-		expect(api.startUpdateDownload).not.toHaveBeenCalled();
-		expect(view.events.at(-1)).toBe("dismiss");
 	});
 
 	it("announces its own success and clears the stage", async () => {
@@ -169,6 +126,24 @@ describe("an add-on update flow", () => {
 		await settled();
 
 		expect(flow.busy).toBe(false);
+	});
+
+	it("clears the verifying stage when the finished download is refused", async () => {
+		api.checkForUpdate.mockResolvedValue(offer("update"));
+		const { flow, view } = await flowFor("google-oauth");
+		await flow.start();
+		view.activate();
+		await settled();
+		emitProgress(progressOf("google-oauth", { phase: "verifying" }));
+
+		emitProgress(
+			progressOf("google-oauth", { phase: "ready", received: 100 }),
+		);
+		await settled();
+
+		expect(view.events.slice(-2)).toEqual(["show:verifying", "dismiss"]);
+		expect(flow.busy).toBe(false);
+		expect(api.installUpdate).not.toHaveBeenCalled();
 	});
 
 	it("ignores an unnamed outcome, which only a self-install produces", async () => {
@@ -256,6 +231,32 @@ describe("the hourly check", () => {
 		expect(view.events).toEqual(["show:ready"]);
 	});
 
+	it.each([
+		["no longer finds the update", upToDate],
+		["finds the update again", offer("update", { component: "app" })],
+	])(
+		"leaves a download tapped during the check alone when it %s",
+		async (_, result) => {
+			const { flow, view } = await flowFor("app");
+			vi.useFakeTimers();
+			await flow.start();
+			let answer: (found: CheckResult) => void = () => {};
+			api.checkForUpdate.mockReturnValue(
+				new Promise((resolve) => {
+					answer = resolve;
+				}),
+			);
+			await vi.advanceTimersByTimeAsync(HOUR_MS);
+
+			view.activate();
+			await vi.advanceTimersByTimeAsync(0);
+			answer(result);
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(view.events).toEqual(["show:available", "show:downloading"]);
+		},
+	);
+
 	it("keeps an install that awaits its outcome busy", async () => {
 		readiness.app = ready("update", "v0.2.0");
 		const { flow, view } = await flowFor("app");
@@ -268,6 +269,116 @@ describe("the hourly check", () => {
 
 		expect(flow.busy).toBe(true);
 		expect(view.events.at(-1)).toBe("show:installing");
+	});
+});
+
+describe("checking on request", () => {
+	it("offers an update it found", async () => {
+		api.checkForUpdate.mockResolvedValue(offer("update"));
+		const { flow, view } = await flowFor("google-oauth");
+
+		expect(await flow.checkNow()).toBe("offered");
+		expect(api.checkForUpdate).toHaveBeenCalledWith(
+			"manual",
+			"google-oauth",
+		);
+		expect(view.events).toEqual(["show:available"]);
+	});
+
+	it("shows a swiped offer again", async () => {
+		api.checkForUpdate.mockResolvedValue(offer("update"));
+		const { flow, view } = await flowFor("google-oauth");
+		await flow.start();
+		view.swipe();
+
+		expect(await flow.checkNow()).toBe("offered");
+		expect(view.events).toEqual(["show:available", "show:available"]);
+	});
+
+	it.each([
+		["an up-to-date add-on", upToDate],
+		["an unpublished add-on", unpublished],
+		["a first install", offer("install")],
+	])("reports %s as nothing to offer, without a toast", async (_, result) => {
+		api.checkForUpdate.mockResolvedValue(result);
+		const { flow, view } = await flowFor("google-oauth");
+
+		expect(await flow.checkNow({ reportFailure: true })).toBe("current");
+		expect(view.events).toEqual([]);
+	});
+
+	it("reports a stage already on screen without checking again", async () => {
+		api.checkForUpdate.mockResolvedValue(offer("update"));
+		const { flow, view } = await flowFor("google-oauth");
+		await flow.start();
+		api.checkForUpdate.mockClear();
+
+		expect(await flow.checkNow()).toBe("busy");
+
+		view.activate();
+		await settled();
+		expect(await flow.checkNow()).toBe("busy");
+		expect(api.checkForUpdate).not.toHaveBeenCalled();
+	});
+
+	it("reports an install awaiting its outcome as busy", async () => {
+		readiness["google-oauth"] = ready("update");
+		const { flow, view } = await flowFor("google-oauth");
+		await flow.start();
+		view.activate();
+		await settled();
+		view.swipe();
+
+		expect(await flow.checkNow()).toBe("busy");
+	});
+
+	it("reports a download that started during the check as busy", async () => {
+		const { flow, view } = await flowFor("google-oauth");
+		let answer: (found: CheckResult) => void = () => {};
+		api.checkForUpdate.mockReturnValue(
+			new Promise((resolve) => {
+				answer = resolve;
+			}),
+		);
+
+		const checking = flow.checkNow();
+		emitProgress(progressOf("google-oauth", { received: 40 }));
+		answer(offer("update"));
+
+		expect(await checking).toBe("busy");
+		expect(view.events).toEqual(["show:downloading"]);
+	});
+
+	it("stays quiet about an unverifiable release index unless asked to report", async () => {
+		api.checkForUpdate.mockRejectedValue({ kind: "unsigned" });
+		const { flow, view } = await flowFor("google-oauth");
+
+		expect(await flow.checkNow({ reportFailure: false })).toBe("failed");
+		expect(view.events).toEqual([]);
+	});
+
+	it("still reports an unverifiable release index found at launch", async () => {
+		api.checkForUpdate.mockRejectedValue({ kind: "unsigned" });
+		const { flow, view } = await flowFor("google-oauth");
+
+		await flow.start();
+
+		expect(view.problems()).toEqual([
+			"problem:Failed to verify the companion app",
+		]);
+	});
+
+	it("toasts a failed check only when asked to", async () => {
+		api.checkForUpdate.mockRejectedValue({ kind: "network" });
+		const { flow, view } = await flowFor("google-oauth");
+
+		expect(await flow.checkNow()).toBe("failed");
+		expect(view.problems()).toEqual([]);
+
+		expect(await flow.checkNow({ reportFailure: true })).toBe("failed");
+		expect(view.problems()).toEqual([
+			"problem:Couldn't reach the release server",
+		]);
 	});
 });
 
@@ -546,6 +657,37 @@ describe("installing on request", () => {
 		]);
 	});
 
+	it("keeps the download tappable when the permission screen will not open", async () => {
+		readiness["google-oauth"] = awaitingPermission("install");
+		api.openInstallPermissionSettings.mockRejectedValue(
+			new Error("no activity"),
+		);
+		const { flow, view } = await flowFor("google-oauth");
+
+		await flow.installNow();
+
+		expect(view.events).toEqual([
+			"show:ready",
+			"problem:Couldn't open the install permission screen",
+		]);
+	});
+
+	it.each<[InstallKind, string]>([
+		["update", "problem:Couldn't update the companion app"],
+		["install", "problem:Couldn't install the companion app"],
+	])(
+		"names a companion app %s the system refused to install",
+		async (kind, problem) => {
+			readiness["google-oauth"] = ready(kind);
+			api.installUpdate.mockRejectedValue({ kind: "install" });
+			const { flow, view } = await flowFor("google-oauth");
+
+			await flow.installNow();
+
+			expect(view.problems()).toEqual([problem]);
+		},
+	);
+
 	it("names the companion app when its store owns its updates", async () => {
 		readiness["google-oauth"] = {
 			state: "unsupported",
@@ -561,19 +703,5 @@ describe("installing on request", () => {
 		expect(view.problems()).toEqual([
 			"problem:The store that installed the companion app manages its updates",
 		]);
-	});
-});
-
-describe("switching presenters", () => {
-	it("moves a visible download to the new presenter", async () => {
-		const { flow, view } = await flowFor("google-oauth");
-		await flow.start();
-		emitProgress(progressOf("google-oauth", { received: 40 }));
-		const inline = recorder();
-
-		flow.present(inline.presenter);
-
-		expect(view.events.at(-1)).toBe("dismiss");
-		expect(inline.events).toEqual(["show:downloading"]);
 	});
 });

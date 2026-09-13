@@ -1,4 +1,4 @@
-import { UpdateFlow } from "./flow";
+import { type CheckOptions, type CheckReport, UpdateFlow } from "./flow";
 import { APP_COMPONENT } from "./index";
 import { toastPresenter } from "./toast-presenter";
 
@@ -11,6 +11,8 @@ export function startUpdateWatch(): Promise<void> {
 	return app.start();
 }
 
-export function checkForUpdateNow(): Promise<void> {
-	return app.checkNow();
+export function checkForUpdateNow(
+	options: CheckOptions = {},
+): Promise<CheckReport> {
+	return app.checkNow(options);
 }

@@ -6,13 +6,15 @@
 	import { getUpdateSettings, setAutomaticUpdateChecks } from "$lib/updates";
 	import { addonInstallerAvailable } from "$lib/updates/addon.svelte";
 	import {
-		automaticChecksSetting,
-		checkAfterOptIn,
-	} from "$lib/updates/automatic-checks";
-	import {
 		updatesSelfManaged,
 		updatesUnsupportedReason,
 	} from "$lib/updates/capability.svelte";
+	import {
+		automaticChecksSetting,
+		checkAfterOptIn,
+		manualCheckOffered,
+	} from "$lib/updates/update-checks";
+	import CheckForUpdatesButton from "./CheckForUpdatesButton.svelte";
 
 	let stored = $state<boolean | null>(null);
 	let pending = $state<boolean | null>(null);
@@ -68,3 +70,6 @@
 		}
 	}
 />
+{#if manualCheckOffered({ selfManaged, addonAvailable })}
+	<CheckForUpdatesButton {selfManaged} {addonAvailable} />
+{/if}
