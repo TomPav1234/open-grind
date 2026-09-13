@@ -3,7 +3,7 @@ import {
 	COMPONENT_PACKAGE,
 	type ComponentKey,
 } from "./components";
-import { unsupportedText, updateErrorText } from "./error-copy";
+import { noReleaseText, unsupportedText, updateErrorText } from "./error-copy";
 import {
 	asUpdateError,
 	cancelUpdateDownload,
@@ -52,6 +52,10 @@ type InstallClaim = { flow: UpdateFlow; committing: boolean };
 let installOwner: InstallClaim | null = null;
 let permissionOwner: ComponentKey | null = null;
 
+function isOffer({ stage }: StageView): boolean {
+	return stage === "available" || stage === "paused";
+}
+
 export class UpdateFlow {
 	readonly component: ComponentKey;
 	readonly #presenter: StagePresenter;
@@ -59,6 +63,8 @@ export class UpdateFlow {
 	#visible = false;
 	#installedFrom: StageView | null = null;
 	#readyTag: string | null = null;
+	#offerTag: string | null = null;
+	#installOnReturn: (() => void) | null = null;
 	#readyKind: InstallKind = "update";
 	#showing = 0;
 	#armedTag: string | null = null;
@@ -159,6 +165,7 @@ export class UpdateFlow {
 			case "resumable": {
 				this.#readyKind = readiness.detail.kind;
 				this.#armedTag = readiness.detail.tag;
+				this.#offerTag = readiness.detail.tag;
 				const handled = await this.#download(fromScratch, {
 					byUser: true,
 					arm: true,
@@ -168,7 +175,9 @@ export class UpdateFlow {
 			}
 			case "unsupported":
 				this.#presenter.problem(
-					unsupportedText(readiness.detail, this.component),
+					unsupportedText(readiness.detail, {
+						component: this.component,
+					}),
 				);
 				return;
 		}
@@ -178,10 +187,7 @@ export class UpdateFlow {
 		if (!result.available || !result.release) {
 			if (result.currentVersion === null) {
 				this.#presenter.problem(
-					unsupportedText(
-						{ reason: "noReleaseArtifacts" },
-						this.component,
-					),
+					noReleaseText({ component: this.component }),
 				);
 			} else {
 				this.#presenter.upToDate();
@@ -194,10 +200,7 @@ export class UpdateFlow {
 	}
 
 	async #activate(): Promise<void> {
-		if (
-			this.#shown.stage === "available" ||
-			this.#shown.stage === "paused"
-		) {
+		if (isOffer(this.#shown)) {
 			await this.#download(this.#shown, { byUser: true });
 			return;
 		}
@@ -222,7 +225,7 @@ export class UpdateFlow {
 			if (kind === "busy") {
 				this.#armedTag = null;
 				this.#show(before ?? { stage: "paused", received, total });
-				if (byUser) this.#presenter.problem(this.#text(error, ""));
+				if (byUser) this.#problem({ error, fallback: "" });
 				return true;
 			}
 			if (kind !== "nothingStaged") {
@@ -251,7 +254,9 @@ export class UpdateFlow {
 				this.#releaseInstall();
 				this.#hide();
 				this.#presenter.problem(
-					unsupportedText(readiness.detail, this.component),
+					unsupportedText(readiness.detail, {
+						component: this.component,
+					}),
 				);
 				return;
 			}
@@ -288,9 +293,10 @@ export class UpdateFlow {
 					await this.#downloadAgain();
 					return;
 				default:
-					this.#presenter.problem(
-						this.#text(error, "Couldn't install the update"),
-					);
+					this.#problem({
+						error,
+						fallback: "Couldn't install the update",
+					});
 			}
 		} finally {
 			this.#installing = false;
@@ -312,8 +318,7 @@ export class UpdateFlow {
 
 	#yieldInstall(): void {
 		this.#releaseInstall();
-		this.#hide();
-		void this.#settle();
+		void this.#settleOrHide();
 	}
 
 	async #stillInstalled(): Promise<boolean> {
@@ -338,12 +343,10 @@ export class UpdateFlow {
 		try {
 			await openInstallPermissionSettings();
 		} catch (error) {
-			this.#presenter.problem(
-				this.#text(
-					error,
-					"Couldn't open the install permission screen",
-				),
-			);
+			this.#problem({
+				error,
+				fallback: "Couldn't open the install permission screen",
+			});
 			return;
 		}
 		permissionOwner = this.component;
@@ -391,6 +394,7 @@ export class UpdateFlow {
 			switch (readiness?.state) {
 				case "resumable":
 					this.#readyKind = readiness.detail.kind;
+					this.#offerTag = readiness.detail.tag;
 					return await this.#download(fromScratch);
 				case "ready":
 					this.#readyTag = readiness.detail.tag;
@@ -413,15 +417,21 @@ export class UpdateFlow {
 	}
 
 	get #offerReplaceable(): boolean {
-		const { stage } = this.#shown;
-		const offerOnScreen = stage === "available" || stage === "paused";
-		return !this.#installedFrom && (!this.#visible || offerOnScreen);
+		const updateOnScreen =
+			isOffer(this.#shown) && this.#readyKind === "update";
+		return !this.#installedFrom && (!this.#visible || updateOnScreen);
+	}
+
+	#keepsScreen({ available, release }: CheckResult): boolean {
+		if (!this.#offerReplaceable) return true;
+		const offerKept = this.#visible || this.#dismissed;
+		return available && offerKept && release?.tag === this.#offerTag;
 	}
 
 	async #backgroundCheck(trigger: Trigger): Promise<void> {
 		if (!this.#offerReplaceable) return;
 		const result = await this.#check(trigger);
-		if (!result || !this.#offerReplaceable || this.#offer(result)) return;
+		if (!result || this.#keepsScreen(result) || this.#offer(result)) return;
 		if (this.#visible) this.#hide();
 	}
 
@@ -429,12 +439,13 @@ export class UpdateFlow {
 		trigger: Trigger,
 		{ report = "unsigned" }: { report?: FailureReport } = {},
 	): Promise<CheckResult | null> {
-		return checkForUpdate(trigger, this.component).catch(
+		return checkForUpdate({ trigger, component: this.component }).catch(
 			(error: unknown) => {
 				if (report === "all") {
-					this.#presenter.problem(
-						this.#text(error, "Couldn't check for updates"),
-					);
+					this.#problem({
+						error,
+						fallback: "Couldn't check for updates",
+					});
 				} else if (
 					report === "unsigned" &&
 					asUpdateError(error)?.kind === "unsigned"
@@ -462,6 +473,7 @@ export class UpdateFlow {
 		if (release.kind !== "update" && !acceptInstall) return false;
 		this.#readyKind = release.kind;
 		this.#dismissed = false;
+		this.#offerTag = release.tag;
 		this.#show({ stage: "available", ...fromScratch });
 		return true;
 	}
@@ -515,6 +527,7 @@ export class UpdateFlow {
 				) {
 					this.#armedTag = null;
 				}
+				this.#offerTag = progress.tag;
 				this.#show(change.view);
 				return;
 			}
@@ -524,9 +537,30 @@ export class UpdateFlow {
 			if (armed) this.#armedTag = null;
 			if (this.#installing) return;
 			void this.#settleOrHide().then((usable) => {
-				if (usable && armed) void this.#install();
+				if (usable && armed) this.#installOnceVisible();
 			});
 		});
+	}
+
+	#installOnceVisible(): void {
+		if (document.visibilityState === "visible") {
+			void this.#install();
+			return;
+		}
+		this.#forgetInstallOnReturn();
+		const resume = (): void => {
+			if (document.visibilityState !== "visible") return;
+			this.#forgetInstallOnReturn();
+			void this.#install();
+		};
+		this.#installOnReturn = resume;
+		document.addEventListener("visibilitychange", resume);
+	}
+
+	#forgetInstallOnReturn(): void {
+		if (!this.#installOnReturn) return;
+		document.removeEventListener("visibilitychange", this.#installOnReturn);
+		this.#installOnReturn = null;
 	}
 
 	async #announceLastInstall(): Promise<void> {
@@ -543,7 +577,8 @@ export class UpdateFlow {
 	}
 
 	#show(next: StageView): void {
-		const offerable = next.stage === "available" || next.stage === "paused";
+		if (next.stage !== "ready") this.#forgetInstallOnReturn();
+		const offerable = isOffer(next);
 		if (this.#dismissed && offerable) {
 			this.#shown = next;
 			if (this.#visible) this.#hide();
@@ -558,11 +593,11 @@ export class UpdateFlow {
 			onActivate: () => void this.#activate(),
 			onCancel: () =>
 				void cancelUpdateDownload(this.component).catch(
-					(error: unknown) => {
-						this.#presenter.problem(
-							this.#text(error, "Couldn't stop the download"),
-						);
-					},
+					(error: unknown) =>
+						this.#problem({
+							error,
+							fallback: "Couldn't stop the download",
+						}),
 				),
 			onDismiss: () => {
 				if (showing !== this.#showing) return;
@@ -573,17 +608,21 @@ export class UpdateFlow {
 	}
 
 	#hide(): void {
+		this.#forgetInstallOnReturn();
+		this.#offerTag = null;
 		this.#showing++;
 		this.#visible = false;
 		this.#presenter.dismiss();
 	}
 
-	#text(error: unknown, fallback: string): string {
-		return updateErrorText(error, {
-			fallback,
-			component: this.component,
-			kind: this.#readyKind,
-		});
+	#problem({ error, fallback }: { error: unknown; fallback: string }): void {
+		this.#presenter.problem(
+			updateErrorText(error, {
+				fallback,
+				component: this.component,
+				kind: this.#readyKind,
+			}),
+		);
 	}
 
 	#reportFailure(error: unknown): void {
@@ -595,7 +634,7 @@ export class UpdateFlow {
 		}
 
 		this.#hide();
-		this.#presenter.problem(this.#text(error, "The update failed"));
+		this.#problem({ error, fallback: "The update failed" });
 
 		if (known?.kind !== "server") return;
 

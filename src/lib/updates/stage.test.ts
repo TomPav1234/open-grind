@@ -12,28 +12,29 @@ const stages: UpdateStage[] = [
 ];
 
 type CopyArgs = Parameters<typeof stageTitle>[0];
+type CopySubject = Omit<CopyArgs, "stage">;
 
-function copyOf(
-	copy: (args: CopyArgs) => string | undefined,
-	component: CopyArgs["component"],
-	kind: CopyArgs["kind"],
-) {
+function copyOf({
+	copy,
+	component,
+	kind,
+}: CopySubject & { copy: (args: CopyArgs) => string | undefined }) {
 	return Object.fromEntries(
 		stages.map((stage) => [stage, copy({ component, kind, stage })]),
 	);
 }
 
-function titles(component: CopyArgs["component"], kind: CopyArgs["kind"]) {
-	return copyOf(stageTitle, component, kind);
+function titles(subject: CopySubject) {
+	return copyOf({ copy: stageTitle, ...subject });
 }
 
-function bodies(component: CopyArgs["component"], kind: CopyArgs["kind"]) {
-	return copyOf(stageBody, component, kind);
+function bodies(subject: CopySubject) {
+	return copyOf({ copy: stageBody, ...subject });
 }
 
 describe("the stage toast title", () => {
 	it("says update while an installed add-on updates", () => {
-		expect(titles("google-oauth", "update")).toEqual({
+		expect(titles({ component: "google-oauth", kind: "update" })).toEqual({
 			available: "Companion app update available",
 			downloading: "Downloading the companion app update…",
 			verifying: "Verifying the companion app update…",
@@ -44,7 +45,7 @@ describe("the stage toast title", () => {
 	});
 
 	it("says install while an add-on installs for the first time", () => {
-		expect(titles("google-oauth", "install")).toEqual({
+		expect(titles({ component: "google-oauth", kind: "install" })).toEqual({
 			available: "Companion app is available",
 			downloading: "Downloading the companion app…",
 			verifying: "Verifying the companion app…",
@@ -55,7 +56,7 @@ describe("the stage toast title", () => {
 	});
 
 	it("keeps the app's own copy", () => {
-		expect(titles("app", "update")).toEqual({
+		expect(titles({ component: "app", kind: "update" })).toEqual({
 			available: "New update available",
 			downloading: "Downloading update…",
 			verifying: "Verifying the update…",
@@ -77,7 +78,7 @@ describe("the stage toast body", () => {
 	};
 
 	it("says update while an installed add-on updates", () => {
-		expect(bodies("google-oauth", "update")).toEqual({
+		expect(bodies({ component: "google-oauth", kind: "update" })).toEqual({
 			available: "Tap to update, swipe to dismiss",
 			downloading: undefined,
 			verifying: undefined,
@@ -88,10 +89,14 @@ describe("the stage toast body", () => {
 	});
 
 	it("says install while an add-on installs for the first time", () => {
-		expect(bodies("google-oauth", "install")).toEqual(installBodies);
+		expect(bodies({ component: "google-oauth", kind: "install" })).toEqual(
+			installBodies,
+		);
 	});
 
 	it("keeps the app's own copy", () => {
-		expect(bodies("app", "update")).toEqual(installBodies);
+		expect(bodies({ component: "app", kind: "update" })).toEqual(
+			installBodies,
+		);
 	});
 });

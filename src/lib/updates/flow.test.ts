@@ -59,10 +59,10 @@ describe("an add-on update flow", () => {
 		await flow.start();
 
 		expect(view.events).toEqual([]);
-		expect(api.checkForUpdate).toHaveBeenCalledWith(
-			"launch",
-			"google-oauth",
-		);
+		expect(api.checkForUpdate).toHaveBeenCalledWith({
+			trigger: "launch",
+			component: "google-oauth",
+		});
 	});
 
 	it("does not adopt a running download that belongs to the app", async () => {
@@ -163,7 +163,7 @@ describe("an add-on update flow", () => {
 
 describe("the app's own flow", () => {
 	it("leaves a live success to the relaunch that follows it", async () => {
-		readiness.app = ready("update", "v0.2.0");
+		readiness.app = ready("update", { tag: "v0.2.0" });
 		const { flow, view } = await flowFor("app");
 		await flow.start();
 		view.activate();
@@ -217,11 +217,14 @@ describe("the hourly check", () => {
 		await vi.advanceTimersByTimeAsync(HOUR_MS);
 
 		expect(api.checkForUpdate).toHaveBeenCalledTimes(2);
-		expect(api.checkForUpdate).toHaveBeenLastCalledWith("automatic", "app");
+		expect(api.checkForUpdate).toHaveBeenLastCalledWith({
+			trigger: "automatic",
+			component: "app",
+		});
 	});
 
 	it("keeps a downloaded update on screen", async () => {
-		readiness.app = ready("update", "v0.2.0");
+		readiness.app = ready("update", { tag: "v0.2.0" });
 		const { flow, view } = await flowFor("app");
 		vi.useFakeTimers();
 		await flow.start();
@@ -258,7 +261,7 @@ describe("the hourly check", () => {
 	);
 
 	it("keeps an install that awaits its outcome busy", async () => {
-		readiness.app = ready("update", "v0.2.0");
+		readiness.app = ready("update", { tag: "v0.2.0" });
 		const { flow, view } = await flowFor("app");
 		vi.useFakeTimers();
 		await flow.start();
@@ -278,10 +281,10 @@ describe("checking on request", () => {
 		const { flow, view } = await flowFor("google-oauth");
 
 		expect(await flow.checkNow()).toBe("offered");
-		expect(api.checkForUpdate).toHaveBeenCalledWith(
-			"manual",
-			"google-oauth",
-		);
+		expect(api.checkForUpdate).toHaveBeenCalledWith({
+			trigger: "manual",
+			component: "google-oauth",
+		});
 		expect(view.events).toEqual(["show:available"]);
 	});
 
@@ -388,10 +391,10 @@ describe("installing on request", () => {
 		const { flow, view } = await flowFor("google-oauth");
 
 		await flow.installNow();
-		expect(api.checkForUpdate).toHaveBeenCalledWith(
-			"manual",
-			"google-oauth",
-		);
+		expect(api.checkForUpdate).toHaveBeenCalledWith({
+			trigger: "manual",
+			component: "google-oauth",
+		});
 		expect(api.installUpdate).not.toHaveBeenCalled();
 
 		readiness["google-oauth"] = ready("install");
@@ -535,14 +538,14 @@ describe("installing on request", () => {
 	});
 
 	it("installs the release the backend actually started, not the stale stage", async () => {
-		readiness["google-oauth"] = resumable("install", "v1.1.0");
+		readiness["google-oauth"] = resumable("install", { tag: "v1.1.0" });
 		api.startUpdateDownload.mockResolvedValue(
 			progressOf("google-oauth", { tag: "v1.3.0", version: "1.3.0" }),
 		);
 		const { flow } = await flowFor("google-oauth");
 
 		await flow.installNow();
-		readiness["google-oauth"] = ready("install", "v1.3.0");
+		readiness["google-oauth"] = ready("install", { tag: "v1.3.0" });
 		emitProgress(
 			progressOf("google-oauth", { phase: "ready", tag: "v1.3.0" }),
 		);
@@ -567,7 +570,7 @@ describe("installing on request", () => {
 		const { flow } = await flowFor("google-oauth");
 		await flow.installNow();
 
-		readiness["google-oauth"] = ready("install", "v9.9.9");
+		readiness["google-oauth"] = ready("install", { tag: "v9.9.9" });
 		emitProgress(
 			progressOf("google-oauth", { phase: "ready", tag: "v9.9.9" }),
 		);
@@ -587,7 +590,7 @@ describe("installing on request", () => {
 	});
 
 	it("checks instead of stopping when the partial download is refused", async () => {
-		readiness["google-oauth"] = resumable("install", "v1.1.0");
+		readiness["google-oauth"] = resumable("install", { tag: "v1.1.0" });
 		api.startUpdateDownload.mockRejectedValueOnce({
 			kind: "nothingStaged",
 		});
@@ -596,12 +599,12 @@ describe("installing on request", () => {
 
 		await flow.installNow();
 
-		expect(api.checkForUpdate).toHaveBeenCalledWith(
-			"manual",
-			"google-oauth",
-		);
+		expect(api.checkForUpdate).toHaveBeenCalledWith({
+			trigger: "manual",
+			component: "google-oauth",
+		});
 		expect(view.events.at(-1)).toBe(
-			"problem:The companion app isn't published for this device",
+			"problem:No companion app release is published yet",
 		);
 	});
 
@@ -653,7 +656,18 @@ describe("installing on request", () => {
 
 		expect(view.events).toEqual([
 			"upToDate",
-			"problem:The companion app isn't published for this device",
+			"problem:No companion app release is published yet",
+		]);
+	});
+
+	it("says no app release is published yet when the index has none", async () => {
+		api.checkForUpdate.mockResolvedValue(unpublished);
+		const { flow, view } = await flowFor("app");
+
+		await flow.installNow();
+
+		expect(view.events).toEqual([
+			"problem:No Open Grind release is published yet",
 		]);
 	});
 

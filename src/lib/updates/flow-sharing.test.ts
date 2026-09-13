@@ -27,7 +27,7 @@ beforeEach(() => {
 
 describe("flows sharing one device", () => {
 	async function addonInstallWhileAppInstalls() {
-		readiness.app = ready("update", "v0.2.0");
+		readiness.app = ready("update", { tag: "v0.2.0" });
 		readiness["google-oauth"] = ready("update");
 		const app = await flowFor("app");
 		const addon = await flowFor("google-oauth");
@@ -68,7 +68,7 @@ describe("flows sharing one device", () => {
 	});
 
 	it("return the flow they took over from to its downloaded stage", async () => {
-		readiness.app = ready("update", "v0.2.0");
+		readiness.app = ready("update", { tag: "v0.2.0" });
 		readiness["google-oauth"] = ready("update");
 		const app = await flowFor("app");
 		const addon = await flowFor("google-oauth");
@@ -76,16 +76,17 @@ describe("flows sharing one device", () => {
 		await addon.flow.start();
 		app.view.activate();
 		await settled();
+		const installing = app.view.events.length;
 		expect(app.view.events.at(-1)).toBe("show:installing");
 
 		addon.view.activate();
 		await settled();
 
-		expect(app.view.events.at(-1)).toBe("show:ready");
+		expect(app.view.events.slice(installing)).toEqual(["show:ready"]);
 	});
 
 	it("leave alone an install that finished while they were asking the system", async () => {
-		readiness.app = ready("update", "v0.2.0");
+		readiness.app = ready("update", { tag: "v0.2.0" });
 		readiness["google-oauth"] = ready("update");
 		let answer!: (pending: boolean) => void;
 		api.installPending.mockImplementation(
@@ -111,7 +112,7 @@ describe("flows sharing one device", () => {
 	});
 
 	it("never ask the system while the other install is still being handed over", async () => {
-		readiness.app = ready("update", "v0.2.0");
+		readiness.app = ready("update", { tag: "v0.2.0" });
 		readiness["google-oauth"] = ready("update");
 		api.installUpdate.mockImplementation(
 			(component?: string) =>
@@ -148,7 +149,7 @@ describe("flows sharing one device", () => {
 	});
 
 	it("share one install permission, so a grant in one flow counts for the other", async () => {
-		readiness.app = awaitingPermission("update", "v0.2.0");
+		readiness.app = awaitingPermission("update", { tag: "v0.2.0" });
 		readiness["google-oauth"] = awaitingPermission("update");
 		const app = await flowFor("app");
 		const addon = await flowFor("google-oauth");
@@ -159,7 +160,7 @@ describe("flows sharing one device", () => {
 		await settled();
 		expect(api.openInstallPermissionSettings).toHaveBeenCalledTimes(1);
 
-		readiness.app = ready("update", "v0.2.0");
+		readiness.app = ready("update", { tag: "v0.2.0" });
 		readiness["google-oauth"] = ready("update");
 		addon.view.activate();
 		await settled();
@@ -172,7 +173,7 @@ describe("flows sharing one device", () => {
 	});
 
 	it("resume only the flow that opened the permission screen", async () => {
-		readiness.app = awaitingPermission("update", "v0.2.0");
+		readiness.app = awaitingPermission("update", { tag: "v0.2.0" });
 		readiness["google-oauth"] = awaitingPermission("update");
 		const app = await flowFor("app");
 		const addon = await flowFor("google-oauth");
@@ -185,7 +186,7 @@ describe("flows sharing one device", () => {
 		await settled();
 		expect(api.openInstallPermissionSettings).toHaveBeenCalledTimes(2);
 
-		readiness.app = ready("update", "v0.2.0");
+		readiness.app = ready("update", { tag: "v0.2.0" });
 		readiness["google-oauth"] = ready("update");
 		document.dispatchEvent(new Event("visibilitychange"));
 		await settled();

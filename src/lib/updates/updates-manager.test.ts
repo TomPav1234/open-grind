@@ -49,7 +49,7 @@ function resetHarness(): void {
 	vi.resetModules();
 	vi.clearAllMocks();
 	fake.reset();
-	readiness.app = ready("update", RELEASE_TAG);
+	readiness.app = ready("update", { tag: RELEASE_TAG });
 	api.checkForUpdate.mockResolvedValue(
 		offer("update", { component: "app", tag: RELEASE_TAG }),
 	);
@@ -72,7 +72,10 @@ describe("a staged update that vanished before the install", () => {
 		lastShown().onActivate();
 		await settled();
 
-		expect(api.checkForUpdate).toHaveBeenCalledWith("manual", "app");
+		expect(api.checkForUpdate).toHaveBeenCalledWith({
+			trigger: "manual",
+			component: "app",
+		});
 		expect(api.startUpdateDownload).toHaveBeenCalled();
 		expect(toasts.showProblem).not.toHaveBeenCalled();
 		expect(lastShown().view.stage).toBe("downloading");
@@ -81,7 +84,7 @@ describe("a staged update that vanished before the install", () => {
 	it("downloads it again when it vanishes as the install starts", async () => {
 		await startAppWatch();
 		api.getUpdateReadiness.mockResolvedValueOnce(
-			ready("update", RELEASE_TAG),
+			ready("update", { tag: RELEASE_TAG }),
 		);
 		readiness.app = nothingStaged;
 		api.installUpdate.mockRejectedValue({ kind: "nothingStaged" });
@@ -90,7 +93,10 @@ describe("a staged update that vanished before the install", () => {
 		await settled();
 
 		expect(api.installUpdate).toHaveBeenCalledOnce();
-		expect(api.checkForUpdate).toHaveBeenCalledWith("manual", "app");
+		expect(api.checkForUpdate).toHaveBeenCalledWith({
+			trigger: "manual",
+			component: "app",
+		});
 		expect(api.startUpdateDownload).toHaveBeenCalled();
 		expect(toasts.showProblem).not.toHaveBeenCalled();
 		expect(lastShown().view.stage).toBe("downloading");
@@ -120,7 +126,10 @@ describe("a staged update that vanished before the install", () => {
 		await settled();
 
 		expect(toasts.showProblem).not.toHaveBeenCalled();
-		expect(api.checkForUpdate).toHaveBeenCalledWith("manual", "app");
+		expect(api.checkForUpdate).toHaveBeenCalledWith({
+			trigger: "manual",
+			component: "app",
+		});
 		expect(api.startUpdateDownload).toHaveBeenCalled();
 	});
 
@@ -140,7 +149,7 @@ describe("a staged update that vanished before the install", () => {
 	});
 
 	it("drops a stage whose release is gone and still checks at launch", async () => {
-		readiness.app = resumable("update", RELEASE_TAG);
+		readiness.app = resumable("update", { tag: RELEASE_TAG });
 		api.startUpdateDownload.mockRejectedValue({ kind: "nothingStaged" });
 		api.checkForUpdate.mockResolvedValue(gone);
 
@@ -148,14 +157,17 @@ describe("a staged update that vanished before the install", () => {
 		await settled();
 
 		expect(api.discardStagedUpdate).toHaveBeenCalled();
-		expect(api.checkForUpdate).toHaveBeenCalledWith("launch", "app");
+		expect(api.checkForUpdate).toHaveBeenCalledWith({
+			trigger: "launch",
+			component: "app",
+		});
 		expect(toasts.showProblem).not.toHaveBeenCalled();
 	});
 
 	it("resumes from disk when there is still something to resume", async () => {
 		await startAppWatch();
 
-		readiness.app = resumable("update", RELEASE_TAG);
+		readiness.app = resumable("update", { tag: RELEASE_TAG });
 
 		lastShown().onActivate();
 		await settled();

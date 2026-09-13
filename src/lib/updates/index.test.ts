@@ -65,7 +65,7 @@ describe("update checks", () => {
 			release,
 		});
 
-		const result = await checkForUpdate("automatic");
+		const result = await checkForUpdate({ trigger: "automatic" });
 
 		expect(invokeMock).toHaveBeenCalledWith("update_check", {
 			component: "app",
@@ -82,7 +82,7 @@ describe("update checks", () => {
 			release: null,
 		});
 
-		const result = await checkForUpdate("manual");
+		const result = await checkForUpdate({ trigger: "manual" });
 
 		expect(result.available).toBe(false);
 		expect(result.release).toBeNull();
@@ -90,7 +90,7 @@ describe("update checks", () => {
 
 	it("rejects a payload that does not match the backend contract", async () => {
 		invokeMock.mockResolvedValue({ available: "yes" });
-		await expect(checkForUpdate("manual")).rejects.toThrow();
+		await expect(checkForUpdate({ trigger: "manual" })).rejects.toThrow();
 	});
 });
 

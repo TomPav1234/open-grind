@@ -86,10 +86,13 @@ export async function setAutomaticUpdateChecks(
 	return parsed("update_set_auto_check", settingsSchema, { enabled });
 }
 
-export async function checkForUpdate(
-	trigger: "manual" | "launch" | "automatic",
-	component: ComponentKey = APP_COMPONENT,
-): Promise<CheckResult> {
+export async function checkForUpdate({
+	trigger,
+	component = APP_COMPONENT,
+}: {
+	trigger: "manual" | "launch" | "automatic";
+	component?: ComponentKey;
+}): Promise<CheckResult> {
 	return parsed("update_check", checkResultSchema, { component, trigger });
 }
 

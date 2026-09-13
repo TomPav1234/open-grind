@@ -17,7 +17,12 @@ export async function settled(): Promise<void> {
 	await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
-export function ready(kind: InstallKind, tag = PUBLISHED_TAG): Readiness {
+type TagOptions = { tag?: string };
+
+export function ready(
+	kind: InstallKind,
+	{ tag = PUBLISHED_TAG }: TagOptions = {},
+): Readiness {
 	return {
 		state: "ready",
 		detail: { tag, version: tag.slice(1), kind, canInstallNow: true },
@@ -26,7 +31,7 @@ export function ready(kind: InstallKind, tag = PUBLISHED_TAG): Readiness {
 
 export function awaitingPermission(
 	kind: InstallKind,
-	tag = PUBLISHED_TAG,
+	{ tag = PUBLISHED_TAG }: TagOptions = {},
 ): Readiness {
 	return {
 		state: "ready",
@@ -34,7 +39,10 @@ export function awaitingPermission(
 	};
 }
 
-export function resumable(kind: InstallKind, tag = PUBLISHED_TAG): Readiness {
+export function resumable(
+	kind: InstallKind,
+	{ tag = PUBLISHED_TAG }: TagOptions = {},
+): Readiness {
 	return { state: "resumable", detail: { tag, version: tag.slice(1), kind } };
 }
 

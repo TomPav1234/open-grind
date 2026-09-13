@@ -58,6 +58,8 @@ const copy: Record<KnownKind, string> = {
 const addonUnsupportedCopy: Partial<Record<Unsupported["reason"], string>> = {
 	externallyManaged:
 		"The store that installed the companion app manages its updates",
+	foreignSigner:
+		"This copy of Open Grind isn't signed by Open Grind, so it can't install the companion app",
 	foreignTarget:
 		"The installed companion app isn't signed by Open Grind. Uninstall it to install the official one.",
 	noReleaseArtifacts: "The companion app isn't published for this device",
@@ -70,7 +72,6 @@ const addonCopy: Partial<Record<KnownKind, string>> = {
 	signature: "Failed to verify the companion app",
 	storage: "Couldn't save the companion app download",
 	install: "Couldn't install the companion app",
-	nothingStaged: "The companion app download is gone",
 };
 
 const addonUpdateCopy: Partial<Record<KnownKind, string>> = {
@@ -79,11 +80,21 @@ const addonUpdateCopy: Partial<Record<KnownKind, string>> = {
 
 export function unsupportedText(
 	{ reason }: Unsupported | Pick<Unsupported, "reason">,
-	component: ComponentKey = APP_COMPONENT,
+	{ component = APP_COMPONENT }: { component?: ComponentKey } = {},
 ): string {
 	const addonText =
 		component === APP_COMPONENT ? undefined : addonUnsupportedCopy[reason];
 	return addonText ?? unsupportedCopy[reason];
+}
+
+export function noReleaseText({
+	component,
+}: {
+	component: ComponentKey;
+}): string {
+	return component === APP_COMPONENT
+		? "No Open Grind release is published yet"
+		: "No companion app release is published yet";
 }
 
 export function updateErrorText(
@@ -97,7 +108,7 @@ export function updateErrorText(
 	const known = asUpdateError(error);
 	if (!known) return fallback;
 	if (known.kind === "unsupported") {
-		return unsupportedText(known.detail, component);
+		return unsupportedText(known.detail, { component });
 	}
 	if (component === APP_COMPONENT) return copy[known.kind];
 	const updateText =

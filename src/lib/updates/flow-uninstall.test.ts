@@ -104,10 +104,10 @@ describe("an add-on uninstalled while its update is on screen", () => {
 		await settled();
 
 		expect(api.openInstallPermissionSettings).not.toHaveBeenCalled();
-		expect(api.checkForUpdate).toHaveBeenCalledWith(
-			"manual",
-			"google-oauth",
-		);
+		expect(api.checkForUpdate).toHaveBeenCalledWith({
+			trigger: "manual",
+			component: "google-oauth",
+		});
 		expect(api.startUpdateDownload).toHaveBeenCalledWith("google-oauth");
 	});
 
