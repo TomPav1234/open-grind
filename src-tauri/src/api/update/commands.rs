@@ -84,11 +84,11 @@ pub async fn update_check(
 	trigger: Trigger,
 ) -> Result<CheckResult, UpdateError> {
 	let component = component::by_key(&component)?;
-	let mut ledger = schedule::load(&app)?;
+	let ledger = schedule::load(&app)?;
 	schedule::admit(&ledger, component, trigger, schedule::now_secs())?;
 	let session = Session::open(&app, component)?;
 	if !schedule::worth_checking(component, &session.baseline, trigger) {
-		schedule::record_check(&app, &mut ledger, component)?;
+		schedule::record_check(&app, component)?;
 		app.state::<UpdateState>().withdraw_updates(component.key);
 		return Ok(CheckResult {
 			available: false,
@@ -98,7 +98,7 @@ pub async fn update_check(
 	}
 
 	let index = release::fetch_index(component, session.channel).await?;
-	schedule::record_check(&app, &mut ledger, component)?;
+	schedule::record_check(&app, component)?;
 
 	let candidate = session.newest_upgrade(&index)?;
 	let state = app.state::<UpdateState>();
@@ -123,10 +123,7 @@ pub async fn update_download(
 	let component = session.component;
 
 	let state = app.state::<UpdateState>();
-	let known = state.offered(component.key);
-	let candidate = match known
-		.or_else(|| state.downloads.retained_candidate(component.key))
-	{
+	let candidate = match state.reusable(component.key, &session.baseline) {
 		Some(candidate) => candidate,
 		None if storage::resumable(
 			component,

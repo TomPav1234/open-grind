@@ -73,6 +73,19 @@ impl Downloads {
 		self.slots.retained.retain_only(component, candidate);
 	}
 
+	#[cfg(test)]
+	pub(in super::super) fn hold(
+		&self,
+		stage: &super::super::storage::Stage,
+		staged: &super::super::storage::Staged,
+	) -> Result<(), UpdateError> {
+		self.slots.retained.keep(
+			stage,
+			staged,
+			super::super::verify::Prehash::default(),
+		)
+	}
+
 	pub fn retained_candidate(&self, component: &str) -> Option<Candidate> {
 		self.slots.retained.candidate(component)
 	}

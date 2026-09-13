@@ -53,6 +53,13 @@ pub struct Candidate {
 }
 
 impl Candidate {
+	pub(super) fn fits(&self, baseline: &Baseline) -> bool {
+		self.kind == baseline.kind()
+			&& Version::parse(&self.version).is_ok_and(|version| {
+				baseline.accepts_stage(self.kind, &version)
+			})
+	}
+
 	pub(super) fn admitted(self) -> Result<Self, UpdateError> {
 		client::assert_release_origin(&self.payload.url)?;
 		client::assert_release_origin(&self.signature.url)?;
@@ -275,6 +282,30 @@ mod tests {
 		.unwrap();
 		assert_eq!(found.kind, InstallKind::Update);
 		assert_eq!(found.component, "app");
+	}
+
+	#[test]
+	fn an_offer_fits_only_the_target_state_it_was_built_for() {
+		let index = index(&[&release("2.0.0", false)]);
+		let channel = Channel::of_host(&host("1.0.0"));
+		let older = Baseline::of_version(current("1.0.0"));
+		let update = offer(&index, &older, channel).unwrap();
+		let install = offer(&index, &Baseline::Absent, channel).unwrap();
+
+		assert!(update.fits(&older));
+		assert!(install.fits(&Baseline::Absent));
+		assert!(
+			!update.fits(&Baseline::Absent),
+			"the target was removed after the check"
+		);
+		assert!(
+			!install.fits(&older),
+			"the target was installed after the check"
+		);
+		assert!(
+			!update.fits(&Baseline::of_version(current("2.0.0"))),
+			"the target already reached the offered version"
+		);
 	}
 
 	#[test]

@@ -23,7 +23,7 @@ pub use download::Progress;
 pub use error::UpdateError;
 pub use install::enforce_home;
 
-use baseline::InstallKind;
+use baseline::{Baseline, InstallKind};
 use release::Candidate;
 
 #[derive(Default)]
@@ -43,6 +43,17 @@ impl UpdateState {
 
 	fn offered(&self, component: &str) -> Option<Candidate> {
 		self.latest.lock().unwrap().get(component).cloned()
+	}
+
+	fn reusable(
+		&self,
+		component: &str,
+		baseline: &Baseline,
+	) -> Option<Candidate> {
+		let fits = |candidate: &Candidate| candidate.fits(baseline);
+		self.offered(component).filter(fits).or_else(|| {
+			self.downloads.retained_candidate(component).filter(fits)
+		})
 	}
 
 	fn withdraw_updates(&self, component: &str) {
@@ -168,5 +179,45 @@ mod tests {
 			state.offered(component::APP.key).is_some(),
 			"another component's offer is not this target's to withdraw"
 		);
+	}
+
+	fn older() -> Baseline {
+		Baseline::of_version(semver::Version::new(1, 0, 0))
+	}
+
+	#[test]
+	fn an_update_offered_before_the_target_was_removed_is_not_reused() {
+		let state = UpdateState::default();
+		let key = component::GOOGLE_OAUTH.key;
+		state.offer(key, Some(offer_of(InstallKind::Update)));
+
+		assert_eq!(state.reusable(key, &Baseline::Absent), None);
+		assert_eq!(
+			state.reusable(key, &older()),
+			Some(offer_of(InstallKind::Update))
+		);
+	}
+
+	#[test]
+	fn a_held_update_for_a_removed_target_is_not_reused() {
+		let root = std::env::temp_dir()
+			.join(format!("og-reusable-{}", std::process::id()));
+		let _ = std::fs::remove_dir_all(&root);
+		let stage = storage::stage(&root, "v1.1.0").unwrap();
+		stage.create().unwrap();
+		std::fs::write(stage.part(), b"half").unwrap();
+		let state = UpdateState::default();
+		let key = component::GOOGLE_OAUTH.key;
+		state
+			.downloads
+			.hold(
+				&stage,
+				&storage::Staged::new(&offer_of(InstallKind::Update)),
+			)
+			.unwrap();
+
+		assert_eq!(state.reusable(key, &Baseline::Absent), None);
+		assert!(state.reusable(key, &older()).is_some());
+		let _ = std::fs::remove_dir_all(root);
 	}
 }

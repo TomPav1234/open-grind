@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -15,6 +16,8 @@ const LEDGER_FILE: &str = "update-check.json";
 
 const MIN_INTERVAL_SECS: u64 = 24 * 60 * 60;
 const JITTER_SECS: u64 = 6 * 60 * 60;
+
+static LEDGER_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Ledger {
@@ -94,12 +97,24 @@ fn path(app: &AppHandle) -> Result<PathBuf, UpdateError> {
 	Ok(dir.join(LEDGER_FILE))
 }
 
+fn exclusive() -> MutexGuard<'static, ()> {
+	LEDGER_LOCK.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 pub fn load(app: &AppHandle) -> Result<Ledger, UpdateError> {
-	let path = path(app)?;
-	let raw = fs::read(&path).ok();
+	load_from(&path(app)?)
+}
+
+fn load_from(path: &Path) -> Result<Ledger, UpdateError> {
+	let _exclusive = exclusive();
+	read_or_seed(path)
+}
+
+fn read_or_seed(path: &Path) -> Result<Ledger, UpdateError> {
+	let raw = fs::read(path).ok();
 	let Decoded { ledger, needs_save } = decode(raw.as_deref(), now_secs());
 	if needs_save {
-		save(app, &ledger)?;
+		save(path, &ledger)?;
 	}
 	Ok(ledger)
 }
@@ -154,18 +169,25 @@ fn migrated_from_v1(raw: &[u8]) -> Option<Ledger> {
 	})
 }
 
-pub fn save(app: &AppHandle, ledger: &Ledger) -> Result<(), UpdateError> {
-	let path = path(app)?;
+fn save(path: &Path, ledger: &Ledger) -> Result<(), UpdateError> {
 	let encoded = serde_json::to_vec(ledger)
 		.map_err(|e| UpdateError::Storage(e.to_string()))?;
-	super::storage::write_durably(&path, &encoded)
+	super::storage::write_durably(path, &encoded)
 }
 
 pub fn set_auto_check(
 	app: &AppHandle,
 	enabled: bool,
 ) -> Result<Ledger, UpdateError> {
-	let mut ledger = load(app)?;
+	set_auto_check_at(&path(app)?, enabled)
+}
+
+fn set_auto_check_at(
+	path: &Path,
+	enabled: bool,
+) -> Result<Ledger, UpdateError> {
+	let _exclusive = exclusive();
+	let mut ledger = read_or_seed(path)?;
 	if ledger.auto_check == enabled {
 		return Ok(ledger);
 	}
@@ -176,7 +198,7 @@ pub fn set_auto_check(
 			*due = next_due_from(now);
 		}
 	}
-	save(app, &ledger)?;
+	save(path, &ledger)?;
 	Ok(ledger)
 }
 
@@ -219,11 +241,19 @@ pub fn worth_checking(
 
 pub fn record_check(
 	app: &AppHandle,
-	ledger: &mut Ledger,
 	component: &Component,
 ) -> Result<(), UpdateError> {
+	record_check_at(&path(app)?, component)
+}
+
+fn record_check_at(
+	path: &Path,
+	component: &Component,
+) -> Result<(), UpdateError> {
+	let _exclusive = exclusive();
+	let mut ledger = read_or_seed(path)?;
 	ledger.record(component, now_secs());
-	save(app, ledger)
+	save(path, &ledger)
 }
 
 #[cfg(test)]
@@ -239,6 +269,73 @@ mod tests {
 				next_check_at,
 			)]),
 		}
+	}
+
+	fn ledger_file(name: &str) -> PathBuf {
+		let dir = std::env::temp_dir()
+			.join(format!("og-ledger-{}-{name}", std::process::id()));
+		let _ = fs::remove_dir_all(&dir);
+		fs::create_dir_all(&dir).unwrap();
+		dir.join(LEDGER_FILE)
+	}
+
+	#[test]
+	fn recording_a_check_keeps_the_switch_saved_before_it() {
+		let path = ledger_file("flip");
+		set_auto_check_at(&path, true).unwrap();
+		set_auto_check_at(&path, false).unwrap();
+		record_check_at(&path, &component::APP).unwrap();
+		assert!(
+			!load_from(&path).unwrap().auto_check,
+			"a check that finished after the opt-out must not opt back in"
+		);
+
+		set_auto_check_at(&path, true).unwrap();
+		record_check_at(&path, &component::GOOGLE_OAUTH).unwrap();
+		assert!(
+			load_from(&path).unwrap().auto_check,
+			"a check that finished after the opt-in must not opt back out"
+		);
+
+		let _ = fs::remove_dir_all(path.parent().unwrap());
+	}
+
+	#[test]
+	fn simultaneous_checks_keep_both_due_dates_and_both_writes() {
+		let path = ledger_file("simultaneous");
+		for _ in 0..64 {
+			save(
+				&path,
+				&Ledger {
+					schema: SCHEMA,
+					auto_check: true,
+					components: BTreeMap::from([
+						(component::APP_KEY.to_owned(), 1),
+						(component::GOOGLE_OAUTH.key.to_owned(), 1),
+					]),
+				},
+			)
+			.unwrap();
+			let start = std::sync::Arc::new(std::sync::Barrier::new(2));
+			let checks = [&component::APP, &component::GOOGLE_OAUTH].map(
+				|checked: &'static Component| {
+					let path = path.clone();
+					let start = start.clone();
+					std::thread::spawn(move || {
+						start.wait();
+						record_check_at(&path, checked)
+					})
+				},
+			);
+			for check in checks {
+				check.join().unwrap().expect("a good check must not fail");
+			}
+
+			let recorded = load_from(&path).unwrap();
+			assert!(recorded.due_at(&component::APP) > Some(1));
+			assert!(recorded.due_at(&component::GOOGLE_OAUTH) > Some(1));
+		}
+		let _ = fs::remove_dir_all(path.parent().unwrap());
 	}
 
 	#[test]
