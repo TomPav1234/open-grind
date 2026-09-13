@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ComponentKey } from "./components";
 import {
 	awaitingPermission,
 	flowFor,
@@ -223,4 +224,33 @@ describe("flows sharing one device", () => {
 			"problem:Another download is already running",
 		]);
 	});
+
+	it.each<[ComponentKey, ComponentKey, string]>([
+		[
+			"google-oauth",
+			"app",
+			"Wait for the Open Grind update to finish downloading",
+		],
+		[
+			"app",
+			"google-oauth",
+			"Wait for the companion app to finish downloading",
+		],
+	])(
+		"tells the %s flow that the %s download has to finish first",
+		async (component, running, problem) => {
+			api.checkForUpdate.mockResolvedValue(
+				offer("update", { component }),
+			);
+			api.startUpdateDownload.mockRejectedValue({
+				kind: "busy",
+				detail: { component: running },
+			});
+			const { flow, view } = await flowFor(component);
+
+			await flow.installNow();
+
+			expect(view.problems()).toEqual([`problem:${problem}`]);
+		},
+	);
 });

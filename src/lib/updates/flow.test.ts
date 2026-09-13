@@ -1,10 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ComponentKey } from "./components";
-import type { InstallKind } from "./flow";
 import type { CheckResult } from "./types";
 import {
-	awaitingPermission,
 	flowFor,
 	offer,
 	outcomeOf,
@@ -63,6 +61,34 @@ describe("an add-on update flow", () => {
 			trigger: "launch",
 			component: "google-oauth",
 		});
+	});
+
+	it("labels a first install it resumes at launch as an install", async () => {
+		api.getUpdateProgress.mockResolvedValue(
+			progressOf("google-oauth", { kind: "install", received: 40 }),
+		);
+		const { flow, view } = await flowFor("google-oauth");
+
+		await flow.start();
+		await flow.withdrawUpdate();
+
+		expect(view.events).toEqual(["show:downloading"]);
+		expect(view.shownKind()).toBe("install");
+		expect(api.discardStagedUpdate).not.toHaveBeenCalled();
+	});
+
+	it("labels a download by the kind its progress reports", async () => {
+		const { flow, view } = await flowFor("google-oauth");
+		await flow.start();
+
+		emitProgress(
+			progressOf("google-oauth", { kind: "install", phase: "verifying" }),
+		);
+		await flow.withdrawUpdate();
+
+		expect(view.events).toEqual(["show:verifying"]);
+		expect(view.shownKind()).toBe("install");
+		expect(api.discardStagedUpdate).not.toHaveBeenCalled();
 	});
 
 	it("does not adopt a running download that belongs to the app", async () => {
@@ -399,7 +425,11 @@ describe("installing on request", () => {
 
 		readiness["google-oauth"] = ready("install");
 		emitProgress(
-			progressOf("google-oauth", { phase: "ready", received: 100 }),
+			progressOf("google-oauth", {
+				kind: "install",
+				phase: "ready",
+				received: 100,
+			}),
 		);
 		await settled();
 
@@ -413,6 +443,7 @@ describe("installing on request", () => {
 		await flow.installNow();
 		readiness["google-oauth"] = ready("install");
 		const downloaded = progressOf("google-oauth", {
+			kind: "install",
 			phase: "ready",
 			received: 100,
 		});
@@ -436,6 +467,7 @@ describe("installing on request", () => {
 
 		emitProgress(
 			progressOf("google-oauth", {
+				kind: "install",
 				phase: "failed",
 				detail: { kind: "assetReplaced" },
 			}),
@@ -445,7 +477,11 @@ describe("installing on request", () => {
 
 		readiness["google-oauth"] = ready("install");
 		emitProgress(
-			progressOf("google-oauth", { phase: "ready", received: 100 }),
+			progressOf("google-oauth", {
+				kind: "install",
+				phase: "ready",
+				received: 100,
+			}),
 		);
 		await settled();
 
@@ -464,7 +500,11 @@ describe("installing on request", () => {
 
 		readiness["google-oauth"] = ready("install");
 		emitProgress(
-			progressOf("google-oauth", { phase: "ready", received: 100 }),
+			progressOf("google-oauth", {
+				kind: "install",
+				phase: "ready",
+				received: 100,
+			}),
 		);
 		await settled();
 
@@ -477,7 +517,11 @@ describe("installing on request", () => {
 		await flow.installNow();
 
 		emitProgress(
-			progressOf("google-oauth", { phase: "canceled", received: 40 }),
+			progressOf("google-oauth", {
+				kind: "install",
+				phase: "canceled",
+				received: 40,
+			}),
 		);
 		view.activate();
 		await settled();
@@ -485,7 +529,11 @@ describe("installing on request", () => {
 
 		readiness["google-oauth"] = ready("install");
 		emitProgress(
-			progressOf("google-oauth", { phase: "ready", received: 100 }),
+			progressOf("google-oauth", {
+				kind: "install",
+				phase: "ready",
+				received: 100,
+			}),
 		);
 		await settled();
 
@@ -498,6 +546,7 @@ describe("installing on request", () => {
 		await flow.installNow();
 		emitProgress(
 			progressOf("google-oauth", {
+				kind: "install",
 				phase: "failed",
 				detail: { kind: "network" },
 			}),
@@ -514,7 +563,9 @@ describe("installing on request", () => {
 		api.checkForUpdate.mockResolvedValue(offer("install"));
 		const { flow } = await flowFor("google-oauth");
 		await flow.installNow();
-		emitProgress(progressOf("google-oauth", { received: 40 }));
+		emitProgress(
+			progressOf("google-oauth", { kind: "install", received: 40 }),
+		);
 
 		readiness["google-oauth"] = resumable("install");
 		await flow.installNow();
@@ -530,7 +581,11 @@ describe("installing on request", () => {
 		await settled();
 
 		emitProgress(
-			progressOf("google-oauth", { phase: "ready", received: 100 }),
+			progressOf("google-oauth", {
+				kind: "install",
+				phase: "ready",
+				received: 100,
+			}),
 		);
 		await settled();
 
@@ -540,14 +595,22 @@ describe("installing on request", () => {
 	it("installs the release the backend actually started, not the stale stage", async () => {
 		readiness["google-oauth"] = resumable("install", { tag: "v1.1.0" });
 		api.startUpdateDownload.mockResolvedValue(
-			progressOf("google-oauth", { tag: "v1.3.0", version: "1.3.0" }),
+			progressOf("google-oauth", {
+				kind: "install",
+				tag: "v1.3.0",
+				version: "1.3.0",
+			}),
 		);
 		const { flow } = await flowFor("google-oauth");
 
 		await flow.installNow();
 		readiness["google-oauth"] = ready("install", { tag: "v1.3.0" });
 		emitProgress(
-			progressOf("google-oauth", { phase: "ready", tag: "v1.3.0" }),
+			progressOf("google-oauth", {
+				kind: "install",
+				phase: "ready",
+				tag: "v1.3.0",
+			}),
 		);
 		await settled();
 
@@ -572,7 +635,11 @@ describe("installing on request", () => {
 
 		readiness["google-oauth"] = ready("install", { tag: "v9.9.9" });
 		emitProgress(
-			progressOf("google-oauth", { phase: "ready", tag: "v9.9.9" }),
+			progressOf("google-oauth", {
+				kind: "install",
+				phase: "ready",
+				tag: "v9.9.9",
+			}),
 		);
 		await settled();
 
@@ -668,54 +735,6 @@ describe("installing on request", () => {
 
 		expect(view.events).toEqual([
 			"problem:No Open Grind release is published yet",
-		]);
-	});
-
-	it("keeps the download tappable when the permission screen will not open", async () => {
-		readiness["google-oauth"] = awaitingPermission("install");
-		api.openInstallPermissionSettings.mockRejectedValue(
-			new Error("no activity"),
-		);
-		const { flow, view } = await flowFor("google-oauth");
-
-		await flow.installNow();
-
-		expect(view.events).toEqual([
-			"show:ready",
-			"problem:Couldn't open the install permission screen",
-		]);
-	});
-
-	it.each<[InstallKind, string]>([
-		["update", "problem:Couldn't update the companion app"],
-		["install", "problem:Couldn't install the companion app"],
-	])(
-		"names a companion app %s the system refused to install",
-		async (kind, problem) => {
-			readiness["google-oauth"] = ready(kind);
-			api.installUpdate.mockRejectedValue({ kind: "install" });
-			const { flow, view } = await flowFor("google-oauth");
-
-			await flow.installNow();
-
-			expect(view.problems()).toEqual([problem]);
-		},
-	);
-
-	it("names the companion app when its store owns its updates", async () => {
-		readiness["google-oauth"] = {
-			state: "unsupported",
-			detail: {
-				reason: "externallyManaged",
-				detail: { installer: "org.fdroid.fdroid" },
-			},
-		};
-		const { flow, view } = await flowFor("google-oauth");
-
-		await flow.installNow();
-
-		expect(view.problems()).toEqual([
-			"problem:The store that installed the companion app manages its updates",
 		]);
 	});
 });

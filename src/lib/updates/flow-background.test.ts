@@ -62,7 +62,7 @@ describe("an armed install whose download finishes while Open Grind is hidden", 
 
 		readiness["google-oauth"] = ready(kind);
 		emitProgress(
-			progressOf("google-oauth", { phase: "ready", received: 100 }),
+			progressOf("google-oauth", { kind, phase: "ready", received: 100 }),
 		);
 		await settled();
 		return { flow, view };
@@ -95,13 +95,14 @@ describe("an armed install whose download finishes while Open Grind is hidden", 
 		leaveOpenGrind();
 		readiness["google-oauth"] = ready("install");
 		const finished = progressOf("google-oauth", {
+			kind: "install",
 			phase: "ready",
 			received: 100,
 		});
 
 		emitProgress(finished);
 		await settled();
-		finishStarting(progressOf("google-oauth"));
+		finishStarting(progressOf("google-oauth", { kind: "install" }));
 		await installing;
 		emitProgress(finished);
 		await settled();
@@ -132,7 +133,11 @@ describe("an armed install whose download finishes while Open Grind is hidden", 
 		await downloadFinishedWhileAway();
 
 		emitProgress(
-			progressOf("google-oauth", { phase: "canceled", received: 40 }),
+			progressOf("google-oauth", {
+				kind: "install",
+				phase: "canceled",
+				received: 40,
+			}),
 		);
 		await settled();
 		returnToOpenGrind();
@@ -161,7 +166,11 @@ describe("the hourly check", () => {
 		api.checkForUpdate.mockResolvedValue(offer("install"));
 		await flow.installNow();
 		emitProgress(
-			progressOf("google-oauth", { phase: "canceled", received: 40 }),
+			progressOf("google-oauth", {
+				kind: "install",
+				phase: "canceled",
+				received: 40,
+			}),
 		);
 		api.checkForUpdate.mockClear();
 		api.checkForUpdate.mockResolvedValue(unpublished);

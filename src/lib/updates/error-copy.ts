@@ -1,4 +1,10 @@
-import { APP_COMPONENT, type ComponentKey } from "./components";
+import z from "zod";
+
+import {
+	APP_COMPONENT,
+	type ComponentKey,
+	GOOGLE_OAUTH_COMPONENT,
+} from "./components";
 import {
 	asUpdateError,
 	type Release,
@@ -43,7 +49,7 @@ const copy: Record<KnownKind, string> = {
 	signature: "Failed to verify the update",
 	storage: "Couldn't write the update to storage",
 	oversize: "The download was larger than the release said",
-	assetReplaced: "The release changed, downloading it again",
+	assetReplaced: "The release changed during the download. Try again.",
 	canceled: "Update canceled",
 	nothingStaged: "No update is ready to install",
 	needsUnknownSources: "Open Grind needs permission to install updates",
@@ -78,6 +84,26 @@ const addonUpdateCopy: Partial<Record<KnownKind, string>> = {
 	install: "Couldn't update the companion app",
 };
 
+const busyCopy: Record<ComponentKey, string> = {
+	[APP_COMPONENT]: "Wait for the Open Grind update to finish downloading",
+	[GOOGLE_OAUTH_COMPONENT]:
+		"Wait for the companion app to finish downloading",
+};
+
+const busyDetailSchema = z.object({
+	component: z.enum([APP_COMPONENT, GOOGLE_OAUTH_COMPONENT]),
+});
+
+const PACKAGE_MANAGER_INSTALL_FAILED_INSUFFICIENT_STORAGE = -4;
+
+const noStorageCopy: Record<typeof APP_COMPONENT | Release["kind"], string> = {
+	[APP_COMPONENT]: "Not enough storage to install the update",
+	install: "Not enough storage to install the companion app",
+	update: "Not enough storage to update the companion app",
+};
+
+const COMPANION_SUBJECT = "Companion app";
+
 export function unsupportedText(
 	{ reason }: Unsupported | Pick<Unsupported, "reason">,
 	{ component = APP_COMPONENT }: { component?: ComponentKey } = {},
@@ -110,8 +136,43 @@ export function updateErrorText(
 	if (known.kind === "unsupported") {
 		return unsupportedText(known.detail, { component });
 	}
+	if (known.kind === "busy") {
+		const running = busyDetailSchema.safeParse(known.detail);
+		return running.success ? busyCopy[running.data.component] : copy.busy;
+	}
 	if (component === APP_COMPONENT) return copy[known.kind];
 	const updateText =
 		kind === "update" ? addonUpdateCopy[known.kind] : undefined;
 	return updateText ?? addonCopy[known.kind] ?? copy[known.kind];
+}
+
+export function installFailedText({
+	code,
+	component,
+	kind,
+}: {
+	code?: number | null;
+	component: ComponentKey;
+	kind: Release["kind"];
+}): string {
+	if (code === PACKAGE_MANAGER_INSTALL_FAILED_INSUFFICIENT_STORAGE) {
+		return noStorageCopy[
+			component === APP_COMPONENT ? APP_COMPONENT : kind
+		];
+	}
+	return updateErrorText(
+		{ kind: "install" },
+		{ fallback: copy.install, component, kind },
+	);
+}
+
+export function problemBody({
+	component,
+	title,
+}: {
+	component: ComponentKey;
+	title: string;
+}): string | undefined {
+	const named = title.toLowerCase().includes(COMPANION_SUBJECT.toLowerCase());
+	return component === APP_COMPONENT || named ? undefined : COMPANION_SUBJECT;
 }

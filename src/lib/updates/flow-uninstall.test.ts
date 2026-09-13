@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { CheckResult } from "./types";
 import {
 	awaitingPermission,
 	flowFor,
@@ -7,6 +8,7 @@ import {
 	progressOf,
 	ready,
 	settled,
+	unpublished,
 	updateApiFake,
 	upToDate,
 } from "./updates-test-helpers";
@@ -213,6 +215,57 @@ describe("an update offer withdrawn after the add-on was uninstalled", () => {
 
 		expect(view.events).toEqual([]);
 		expect(api.discardStagedUpdate).not.toHaveBeenCalled();
+	});
+});
+
+describe("an add-on that changed outside Open Grind before its download started", () => {
+	it.each<[CheckResult, string[]]>([
+		[upToDate, ["show:downloading", "dismiss", "upToDate"]],
+		[
+			unpublished,
+			[
+				"show:downloading",
+				"dismiss",
+				"problem:No companion app release is published yet",
+			],
+		],
+		[offer("update"), ["show:downloading", "dismiss", "show:downloading"]],
+	])(
+		"checks again when the companion app changed before its download started",
+		async (recheck, events) => {
+			api.checkForUpdate
+				.mockResolvedValueOnce(offer("install"))
+				.mockResolvedValueOnce(recheck);
+			api.startUpdateDownload.mockRejectedValueOnce({
+				kind: "nothingStaged",
+			});
+			const { flow, view } = await flowFor("google-oauth");
+
+			await flow.installNow();
+			await settled();
+
+			expect(api.checkForUpdate).toHaveBeenCalledTimes(2);
+			expect(view.events).toEqual(events);
+		},
+	);
+
+	it("checks again only once when the download keeps being refused", async () => {
+		api.checkForUpdate.mockResolvedValue(offer("install"));
+		api.startUpdateDownload.mockRejectedValue({ kind: "nothingStaged" });
+		const { flow, view } = await flowFor("google-oauth");
+
+		await flow.installNow();
+		await settled();
+
+		expect(api.checkForUpdate).toHaveBeenCalledTimes(2);
+		expect(api.startUpdateDownload).toHaveBeenCalledTimes(2);
+		expect(view.events).toEqual([
+			"show:downloading",
+			"dismiss",
+			"show:downloading",
+			"dismiss",
+			"problem:Couldn't start the download",
+		]);
 	});
 });
 

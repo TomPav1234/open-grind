@@ -1,4 +1,5 @@
 import { APP_COMPONENT, type ComponentKey } from "./components";
+import { problemBody } from "./error-copy";
 import type { StagePresenter } from "./flow";
 import {
 	dismissStage,
@@ -15,10 +16,7 @@ export function toastPresenter(component: ComponentKey): StagePresenter {
 		show: (stage) => showStage({ component, ...stage }),
 		dismiss: () => dismissStage(component),
 		problem: (title) =>
-			showProblem({
-				title,
-				body: component === APP_COMPONENT ? undefined : "Companion app",
-			}),
+			showProblem({ title, body: problemBody({ component, title }) }),
 		manualInstall: (body) => showManualInstall(body),
 		installed: ({ tag, kind }) => {
 			if (component === APP_COMPONENT) void showInstalled();

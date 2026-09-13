@@ -26,6 +26,8 @@ vi.mock("./toasts", () => toasts);
 type Shown = { view: StageView; onActivate: () => void };
 
 const RELEASE_TAG = "v0.2.0";
+const RAW_REFUSAL =
+	"INSTALL_FAILED_VERIFICATION_FAILURE: Package Verification Result";
 const nothingStaged = { state: "nothingStaged" } as const;
 const gone = { available: false, currentVersion: "0.1.0", release: null };
 
@@ -145,7 +147,9 @@ describe("a staged update that vanished before the install", () => {
 		await settled();
 
 		expect(api.startUpdateDownload.mock.calls.length).toBe(afterFirst);
-		expect(toasts.showProblem).toHaveBeenCalled();
+		expect(toasts.showProblem).toHaveBeenCalledExactlyOnceWith({
+			title: "The release changed during the download. Try again.",
+		});
 	});
 
 	it("drops a stage whose release is gone and still checks at launch", async () => {
@@ -225,6 +229,45 @@ describe("a download the server refused", () => {
 	});
 });
 
+describe("an install outcome recorded before this launch", () => {
+	beforeEach(resetHarness);
+
+	it.each([
+		["the system refused it", { code: -7, message: RAW_REFUSAL }],
+		[
+			"the app still runs the old version",
+			{ code: null, message: "still running 0.1.0 after the install" },
+		],
+	])("words a failure where %s", async (_, recorded) => {
+		api.takeInstallOutcome.mockResolvedValueOnce({
+			succeeded: false,
+			canceled: false,
+			...recorded,
+		});
+
+		await startAppWatch();
+
+		expect(toasts.showProblem).toHaveBeenCalledExactlyOnceWith({
+			title: "Couldn't install the update",
+		});
+	});
+
+	it("says storage ran out when the system reported it", async () => {
+		api.takeInstallOutcome.mockResolvedValueOnce({
+			succeeded: false,
+			canceled: false,
+			code: -4,
+			message: "INSTALL_FAILED_INSUFFICIENT_STORAGE: Failed to allocate",
+		});
+
+		await startAppWatch();
+
+		expect(toasts.showProblem).toHaveBeenCalledExactlyOnceWith({
+			title: "Not enough storage to install the update",
+		});
+	});
+});
+
 describe("an install outcome delivered while the app is alive", () => {
 	beforeEach(resetHarness);
 
@@ -237,11 +280,14 @@ describe("an install outcome delivered while the app is alive", () => {
 		emitOutcome({
 			succeeded: false,
 			canceled: false,
-			message: "The update did not install",
+			code: -7,
+			message: RAW_REFUSAL,
 		});
 		await settled();
 
-		expect(toasts.showProblem).toHaveBeenCalledTimes(1);
+		expect(toasts.showProblem).toHaveBeenCalledExactlyOnceWith({
+			title: "Couldn't install the update",
+		});
 		expect(api.takeInstallOutcome.mock.calls.length).toBe(consumed + 1);
 	});
 

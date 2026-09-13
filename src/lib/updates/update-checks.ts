@@ -1,6 +1,6 @@
 import { addonUpdates } from "./addon.svelte";
 import { GOOGLE_OAUTH_COMPONENT } from "./components";
-import { updateErrorText } from "./error-copy";
+import { problemBody, updateErrorText } from "./error-copy";
 import type { CheckReport } from "./flow";
 import { getInstalledVersion } from "./index";
 import { showNotice, showProblem, showUpToDate } from "./toasts";
@@ -74,12 +74,13 @@ async function checkInstalledAddon({
 		}
 	} catch (error) {
 		if (reportFailure) {
+			const title = updateErrorText(error, {
+				fallback: "Couldn't check for updates",
+				component: GOOGLE_OAUTH_COMPONENT,
+			});
 			showProblem({
-				title: updateErrorText(error, {
-					fallback: "Couldn't check for updates",
-					component: GOOGLE_OAUTH_COMPONENT,
-				}),
-				body: "Companion app",
+				title,
+				body: problemBody({ component: GOOGLE_OAUTH_COMPONENT, title }),
 			});
 		}
 		return "failed";

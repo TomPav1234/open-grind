@@ -227,6 +227,7 @@ mod tests {
 	fn progress() -> Progress {
 		Progress {
 			component: "app".into(),
+			kind: InstallKind::Update,
 			tag: "v1".into(),
 			version: "0.2.0".into(),
 			phase: Phase::Downloading,

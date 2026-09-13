@@ -3,7 +3,12 @@ import {
 	COMPONENT_PACKAGE,
 	type ComponentKey,
 } from "./components";
-import { noReleaseText, unsupportedText, updateErrorText } from "./error-copy";
+import {
+	installFailedText,
+	noReleaseText,
+	unsupportedText,
+	updateErrorText,
+} from "./error-copy";
 import {
 	asUpdateError,
 	cancelUpdateDownload,
@@ -16,10 +21,10 @@ import {
 	installUpdate,
 	onInstallFinished,
 	onUpdateProgress,
-	openInstallPermissionSettings,
 	startUpdateDownload,
 	takeInstallOutcome,
 } from "./index";
+import { openPermissionScreen, ReturnAction } from "./on-return";
 import { stageOf, type StageView } from "./stage";
 import type { CheckResult, InstallOutcome, Release } from "./types";
 
@@ -50,7 +55,6 @@ const AUTOMATIC_CHECK_TICK_MS = 60 * 60 * 1000;
 type InstallClaim = { flow: UpdateFlow; committing: boolean };
 
 let installOwner: InstallClaim | null = null;
-let permissionOwner: ComponentKey | null = null;
 
 function isOffer({ stage }: StageView): boolean {
 	return stage === "available" || stage === "paused";
@@ -64,7 +68,7 @@ export class UpdateFlow {
 	#installedFrom: StageView | null = null;
 	#readyTag: string | null = null;
 	#offerTag: string | null = null;
-	#installOnReturn: (() => void) | null = null;
+	readonly #installOnReturn = new ReturnAction();
 	#readyKind: InstallKind = "update";
 	#showing = 0;
 	#armedTag: string | null = null;
@@ -116,10 +120,10 @@ export class UpdateFlow {
 		if (
 			resumed &&
 			"view" in resumed &&
-			resumed.view.stage === "downloading" &&
-			(await this.#download(resumed.view))
+			resumed.view.stage === "downloading"
 		) {
-			return;
+			this.#readyKind = running.kind;
+			if (await this.#download(resumed.view)) return;
 		}
 		if (await this.#settle({ atLaunch: true })) return;
 		await this.#offerCheck("launch");
@@ -181,7 +185,10 @@ export class UpdateFlow {
 				);
 				return;
 		}
+		await this.#installFromCheck();
+	}
 
+	async #installFromCheck({ retried = false } = {}): Promise<void> {
 		const result = await this.#check("manual", { report: "all" });
 		if (!result) return;
 		if (!result.available || !result.release) {
@@ -196,7 +203,13 @@ export class UpdateFlow {
 		}
 		this.#readyKind = result.release.kind;
 		this.#armedTag = result.release.tag;
-		await this.#download(fromScratch, { byUser: true, arm: true });
+		const handled = await this.#download(fromScratch, {
+			byUser: true,
+			arm: true,
+		});
+		if (handled) return;
+		if (retried) this.#presenter.problem("Couldn't start the download");
+		else await this.#installFromCheck({ retried: true });
 	}
 
 	async #activate(): Promise<void> {
@@ -340,26 +353,18 @@ export class UpdateFlow {
 	}
 
 	async #requestInstallPermission(): Promise<void> {
-		try {
-			await openInstallPermissionSettings();
-		} catch (error) {
-			this.#problem({
-				error,
-				fallback: "Couldn't open the install permission screen",
-			});
-			return;
+		const opened = await openPermissionScreen({
+			component: this.component,
+			onReturn: () =>
+				void this.#settleOrHide().then((usable) => {
+					if (usable && this.#canInstallNow) void this.#install();
+				}),
+		});
+		if (!opened) {
+			this.#presenter.problem(
+				"Couldn't open the install permission screen",
+			);
 		}
-		permissionOwner = this.component;
-		const resume = (): void => {
-			if (document.visibilityState !== "visible") return;
-			document.removeEventListener("visibilitychange", resume);
-			if (permissionOwner !== this.component) return;
-			permissionOwner = null;
-			void this.#settleOrHide().then((usable) => {
-				if (usable && this.#canInstallNow) void this.#install();
-			});
-		};
-		document.addEventListener("visibilitychange", resume);
 	}
 
 	async #downloadAgain(): Promise<void> {
@@ -505,7 +510,11 @@ export class UpdateFlow {
 			}
 			if (!outcome.canceled) {
 				this.#presenter.problem(
-					outcome.message ?? "The update did not install",
+					installFailedText({
+						code: outcome.code,
+						component: this.component,
+						kind: this.#readyKind,
+					}),
 				);
 			}
 			this.#show(ready);
@@ -513,6 +522,7 @@ export class UpdateFlow {
 		});
 		void onUpdateProgress((progress) => {
 			if (progress.component !== this.component) return;
+			this.#readyKind = progress.kind;
 			const change = stageOf(progress);
 			if ("failed" in change) {
 				if (change.failed?.kind !== "assetReplaced")
@@ -537,30 +547,13 @@ export class UpdateFlow {
 			if (armed) this.#armedTag = null;
 			if (this.#installing) return;
 			void this.#settleOrHide().then((usable) => {
-				if (usable && armed) this.#installOnceVisible();
+				if (usable && armed) {
+					this.#installOnReturn.runOnceVisible(
+						() => void this.#install(),
+					);
+				}
 			});
 		});
-	}
-
-	#installOnceVisible(): void {
-		if (document.visibilityState === "visible") {
-			void this.#install();
-			return;
-		}
-		this.#forgetInstallOnReturn();
-		const resume = (): void => {
-			if (document.visibilityState !== "visible") return;
-			this.#forgetInstallOnReturn();
-			void this.#install();
-		};
-		this.#installOnReturn = resume;
-		document.addEventListener("visibilitychange", resume);
-	}
-
-	#forgetInstallOnReturn(): void {
-		if (!this.#installOnReturn) return;
-		document.removeEventListener("visibilitychange", this.#installOnReturn);
-		this.#installOnReturn = null;
 	}
 
 	async #announceLastInstall(): Promise<void> {
@@ -572,12 +565,16 @@ export class UpdateFlow {
 		}
 		if (outcome.canceled) return;
 		this.#presenter.problem(
-			outcome.message ?? "The update did not install",
+			installFailedText({
+				code: outcome.code,
+				component: this.component,
+				kind: "update",
+			}),
 		);
 	}
 
 	#show(next: StageView): void {
-		if (next.stage !== "ready") this.#forgetInstallOnReturn();
+		if (next.stage !== "ready") this.#installOnReturn.forget();
 		const offerable = isOffer(next);
 		if (this.#dismissed && offerable) {
 			this.#shown = next;
@@ -608,7 +605,7 @@ export class UpdateFlow {
 	}
 
 	#hide(): void {
-		this.#forgetInstallOnReturn();
+		this.#installOnReturn.forget();
 		this.#offerTag = null;
 		this.#showing++;
 		this.#visible = false;

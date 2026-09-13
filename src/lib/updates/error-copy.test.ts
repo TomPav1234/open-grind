@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { APP_COMPONENT, GOOGLE_OAUTH_COMPONENT } from "./components";
 import {
+	installFailedText,
 	noReleaseText,
+	problemBody,
 	unsupportedIsFixable,
 	unsupportedText,
 	updateErrorText,
@@ -100,5 +102,149 @@ describe("copy for a release index with nothing to install", () => {
 				),
 			);
 		}
+	});
+});
+
+describe("copy for an install the system refused", () => {
+	it.each([
+		[APP_COMPONENT, "install", "Couldn't install the update"],
+		[APP_COMPONENT, "update", "Couldn't install the update"],
+		[
+			GOOGLE_OAUTH_COMPONENT,
+			"install",
+			"Couldn't install the companion app",
+		],
+		[GOOGLE_OAUTH_COMPONENT, "update", "Couldn't update the companion app"],
+	] as const)(
+		"words a %s %s by what was installed",
+		(component, kind, text) => {
+			expect(installFailedText({ code: 5, component, kind })).toBe(text);
+			expect(installFailedText({ component, kind })).toBe(text);
+		},
+	);
+
+	it("names full storage for status -4", () => {
+		const code = -4;
+		expect(
+			installFailedText({
+				code,
+				component: APP_COMPONENT,
+				kind: "update",
+			}),
+		).toBe("Not enough storage to install the update");
+		expect(
+			installFailedText({
+				code,
+				component: GOOGLE_OAUTH_COMPONENT,
+				kind: "install",
+			}),
+		).toBe("Not enough storage to install the companion app");
+		expect(
+			installFailedText({
+				code,
+				component: GOOGLE_OAUTH_COMPONENT,
+				kind: "update",
+			}),
+		).toBe("Not enough storage to update the companion app");
+	});
+
+	it.each([1, 4, 6, -18, -20, -110])(
+		"stays generic for status %i",
+		(code) => {
+			expect(
+				installFailedText({
+					code,
+					component: GOOGLE_OAUTH_COMPONENT,
+					kind: "install",
+				}),
+			).toBe("Couldn't install the companion app");
+		},
+	);
+});
+
+describe("copy for a download refused while another one runs", () => {
+	it.each([
+		[
+			GOOGLE_OAUTH_COMPONENT,
+			APP_COMPONENT,
+			"Wait for the Open Grind update to finish downloading",
+		],
+		[
+			APP_COMPONENT,
+			GOOGLE_OAUTH_COMPONENT,
+			"Wait for the companion app to finish downloading",
+		],
+	] as const)(
+		"tells the %s flow which download is running",
+		(component, running, text) => {
+			expect(
+				updateErrorText(
+					{ kind: "busy", detail: { component: running } },
+					{ fallback: "fallback", component },
+				),
+			).toBe(text);
+		},
+	);
+
+	it.each([
+		["no detail", { kind: "busy" }],
+		["an unknown component", { kind: "busy", detail: { component: "x" } }],
+	])("keeps the generic text for %s", (_, error) => {
+		expect(
+			updateErrorText(error, {
+				fallback: "fallback",
+				component: GOOGLE_OAUTH_COMPONENT,
+			}),
+		).toBe("Another download is already running");
+	});
+});
+
+describe("copy for a release replaced after its one automatic retry", () => {
+	it("asks the user to try again instead of promising a download", () => {
+		for (const component of [
+			APP_COMPONENT,
+			GOOGLE_OAUTH_COMPONENT,
+		] as const) {
+			expect(
+				updateErrorText(
+					{ kind: "assetReplaced" },
+					{ fallback: "fallback", component },
+				),
+			).toBe("The release changed during the download. Try again.");
+		}
+	});
+});
+
+describe("the subject line under a problem", () => {
+	it.each([
+		"Couldn't install the companion app",
+		"Couldn't update the companion app",
+		"Failed to verify the companion app",
+		"No companion app release is published yet",
+		"The installed companion app isn't signed by Open Grind. Uninstall it to install the official one.",
+	])("is left out when the title says %s", (title) => {
+		expect(problemBody({ component: GOOGLE_OAUTH_COMPONENT, title })).toBe(
+			undefined,
+		);
+	});
+
+	it.each([
+		"Couldn't reach the release server",
+		"Another download is already running",
+		"Finish the other install first",
+		"The release changed during the download. Try again.",
+	])("names the companion app under %s", (title) => {
+		expect(problemBody({ component: GOOGLE_OAUTH_COMPONENT, title })).toBe(
+			"Companion app",
+		);
+	});
+
+	it("is never added for the app", () => {
+		expect(
+			problemBody({
+				component: APP_COMPONENT,
+				title: "Couldn't reach the release server",
+			}),
+		).toBe(undefined);
 	});
 });

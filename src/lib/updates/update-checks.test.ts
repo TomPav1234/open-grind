@@ -256,6 +256,20 @@ describe("the Check for updates action", () => {
 		});
 	});
 
+	it("does not repeat the companion app under a title that names it", async () => {
+		updatesApi.getInstalledVersion.mockRejectedValue({
+			kind: "unsupported",
+			detail: { reason: "foreignTarget" },
+		});
+
+		await checkForUpdatesNow(storeBuild);
+
+		expect(toasts.showProblem).toHaveBeenCalledExactlyOnceWith({
+			title: "The installed companion app isn't signed by Open Grind. Uninstall it to install the official one.",
+			body: undefined,
+		});
+	});
+
 	it("keeps a failed add-on lookup quiet right after opting in", async () => {
 		updatesApi.getInstalledVersion.mockRejectedValue(
 			new Error("no plugin"),

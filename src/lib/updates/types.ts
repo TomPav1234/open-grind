@@ -102,6 +102,7 @@ export type CheckResult = z.infer<typeof checkResultSchema>;
 
 export const progressSchema = z.object({
 	component: z.string(),
+	kind: installKindSchema,
 	tag: z.string(),
 	version: z.string(),
 	phase: z.enum(["downloading", "verifying", "ready", "canceled", "failed"]),

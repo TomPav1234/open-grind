@@ -96,6 +96,7 @@ export function progressOf(
 ): Progress {
 	return {
 		component,
+		kind: "update",
 		tag: PUBLISHED_TAG,
 		version: PUBLISHED_TAG.slice(1),
 		phase: "downloading",
@@ -222,6 +223,7 @@ export function recorder() {
 		presenter,
 		events,
 		activate: () => lastShow?.onActivate(),
+		shownKind: () => lastShow?.kind ?? null,
 		swipe: () => lastShow?.onDismiss(),
 		problems: () => events.filter((event) => event.startsWith("problem:")),
 	};

@@ -211,6 +211,7 @@ describe("download and install", () => {
 	it("returns progress for a started download", async () => {
 		invokeMock.mockResolvedValue({
 			component: "app",
+			kind: "update",
 			tag: "v0.1.0-beta.4",
 			version: "0.1.0-beta.4",
 			phase: "downloading",
@@ -224,11 +225,13 @@ describe("download and install", () => {
 			component: "app",
 		});
 		expect(progress.phase).toBe("downloading");
+		expect(progress.kind).toBe("update");
 	});
 
 	it("carries the failure detail on a failed transfer", async () => {
 		invokeMock.mockResolvedValue({
 			component: "app",
+			kind: "update",
 			tag: "v0.1.0-beta.4",
 			version: "0.1.0-beta.4",
 			phase: "failed",
@@ -309,15 +312,19 @@ describe("progress events", () => {
 
 		callback({
 			payload: {
-				component: "app",
-				tag: "v0.1.0-beta.4",
-				version: "0.1.0-beta.4",
+				component: "google-oauth",
+				kind: "install",
+				tag: "v1.2.0",
+				version: "1.2.0",
 				phase: "verifying",
 				received: 72294080,
 				total: 72294080,
 			},
 		});
 		expect(handler).toHaveBeenCalledOnce();
+		expect(handler).toHaveBeenCalledWith(
+			expect.objectContaining({ kind: "install" }),
+		);
 
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		callback({ payload: { phase: "nonsense" } });

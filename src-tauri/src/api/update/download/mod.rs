@@ -12,6 +12,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Runtime};
 use tokio::sync::watch;
 
+use super::baseline::InstallKind;
 use super::error::UpdateError;
 use super::release::Candidate;
 pub use queue::Downloads;
@@ -32,6 +33,7 @@ pub enum Phase {
 #[serde(rename_all = "camelCase")]
 pub struct Progress {
 	pub component: String,
+	pub kind: InstallKind,
 	pub tag: String,
 	pub version: String,
 	#[serde(flatten)]
@@ -48,6 +50,7 @@ impl Progress {
 	) -> Self {
 		Self {
 			component: candidate.component.clone(),
+			kind: candidate.kind,
 			tag: candidate.tag.clone(),
 			version: candidate.version.clone(),
 			phase,
