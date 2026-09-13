@@ -111,7 +111,11 @@ fn load_from(path: &Path) -> Result<Ledger, UpdateError> {
 }
 
 fn read_or_seed(path: &Path) -> Result<Ledger, UpdateError> {
-	let raw = fs::read(path).ok();
+	let raw = match fs::read(path) {
+		Ok(raw) => Some(raw),
+		Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+		Err(e) => return Err(e.into()),
+	};
 	let Decoded { ledger, needs_save } = decode(raw.as_deref(), now_secs());
 	if needs_save {
 		save(path, &ledger)?;
@@ -297,6 +301,71 @@ mod tests {
 			"a check that finished after the opt-in must not opt back out"
 		);
 
+		let _ = fs::remove_dir_all(path.parent().unwrap());
+	}
+
+	#[test]
+	fn a_missing_ledger_is_seeded_opted_out_and_saved() {
+		let path = ledger_file("missing");
+
+		let seeded = load_from(&path).unwrap();
+
+		assert!(!seeded.auto_check);
+		assert_eq!(
+			serde_json::from_slice::<Ledger>(&fs::read(&path).unwrap())
+				.unwrap(),
+			seeded
+		);
+		let _ = fs::remove_dir_all(path.parent().unwrap());
+	}
+
+	#[test]
+	fn a_ledger_that_cannot_be_read_is_reported_and_never_overwritten() {
+		let path = ledger_file("unreadable-directory");
+		fs::create_dir_all(&path).unwrap();
+		let temp = path.with_extension("json.tmp");
+
+		assert!(matches!(load_from(&path), Err(UpdateError::Storage(_))));
+		assert!(matches!(
+			set_auto_check_at(&path, true),
+			Err(UpdateError::Storage(_))
+		));
+		assert!(matches!(
+			record_check_at(&path, &component::APP),
+			Err(UpdateError::Storage(_))
+		));
+		assert!(
+			!temp.exists(),
+			"a read failure must not start writing a fresh ledger"
+		);
+		assert!(path.is_dir());
+		let _ = fs::remove_dir_all(path.parent().unwrap());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn a_transient_read_failure_keeps_the_saved_consent() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let path = ledger_file("unreadable-permissions");
+		set_auto_check_at(&path, true).unwrap();
+		let before = fs::read(&path).unwrap();
+		fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).unwrap();
+		let denied = fs::read(&path).is_err();
+
+		let recorded = record_check_at(&path, &component::APP);
+		let loaded = load_from(&path);
+		fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+
+		if denied {
+			assert!(matches!(recorded, Err(UpdateError::Storage(_))));
+			assert!(matches!(loaded, Err(UpdateError::Storage(_))));
+			assert_eq!(fs::read(&path).unwrap(), before);
+		}
+		assert!(
+			load_from(&path).unwrap().auto_check,
+			"a failed read must never turn automatic checks off"
+		);
 		let _ = fs::remove_dir_all(path.parent().unwrap());
 	}
 
