@@ -188,64 +188,7 @@ pub(super) fn is_transient(error: &UpdateError) -> bool {
 
 #[cfg(test)]
 mod tests {
-	use super::super::super::baseline::InstallKind;
-	use super::super::super::client;
-	use super::super::super::release::Artifact;
 	use super::*;
-
-	fn published(kind: InstallKind) -> Candidate {
-		Candidate {
-			component: "google-oauth".into(),
-			kind,
-			tag: "v1.1.0".into(),
-			version: "1.1.0".into(),
-			notes: None,
-			published_at: None,
-			payload: Artifact {
-				name: "open-grind-google-oauth-v1.1.0-arm64-v8a.apk".into(),
-				url: format!("{}a.apk", client::origin()),
-				uuid: "uuid".into(),
-				size: 4,
-			},
-			signature: Artifact {
-				name: "open-grind-google-oauth-v1.1.0-arm64-v8a.apk.minisig"
-					.into(),
-				url: format!("{}a.apk.minisig", client::origin()),
-				uuid: "sig".into(),
-				size: 228,
-			},
-		}
-	}
-
-	#[test]
-	fn a_verified_stage_reused_for_a_first_install_is_relabelled_on_disk() {
-		let root = std::env::temp_dir()
-			.join(format!("og-adopt-{}-relabel", std::process::id()));
-		let _ = fs::remove_dir_all(&root);
-		let stage = storage::stage(&root, "v1.1.0").unwrap();
-		stage.create().unwrap();
-		fs::write(stage.payload(), b"apk!").unwrap();
-		let mut staged_as_update = Staged::new(&published(InstallKind::Update));
-		staged_as_update.downloaded = 4;
-		staged_as_update.verified = true;
-		staged_as_update.payload_digest = Some("digest".into());
-		stage.save(&staged_as_update).unwrap();
-
-		let adopted =
-			adopt_or_reset(&stage, &published(InstallKind::Install)).unwrap();
-
-		assert!(
-			adopted.verified && adopted.payload_on_disk(&stage),
-			"the verified bytes must be reused, not downloaded again"
-		);
-		assert_eq!(adopted.kind, InstallKind::Install);
-		assert_eq!(
-			stage.load().unwrap().kind,
-			InstallKind::Install,
-			"the install path reads the kind from the sidecar"
-		);
-		let _ = fs::remove_dir_all(&root);
-	}
 
 	#[test]
 	fn only_network_and_retryable_statuses_are_retried() {

@@ -151,19 +151,15 @@ pub fn purge(
 	component: &Component,
 	root: &Path,
 	baseline: &Baseline,
-	keep: Option<&str>,
+	starting: Option<&Candidate>,
 ) {
-	if !baseline.orderable() {
+	if matches!(baseline, Baseline::Unreadable { .. }) {
 		return;
 	}
-	let kept = eligible_stages(component, root, baseline)
-		.filter(|(_, stage, _)| {
-			dir_name(&stage.dir).is_some_and(|name| {
-				tag_is_safe(name) && keep.is_none_or(|tag| tag == name)
-			})
-		})
-		.max_by(|(left, ..), (right, ..)| left.cmp(right))
-		.map(|(_, stage, _)| stage.dir);
+	let kept = match starting {
+		Some(candidate) => stage_describing(root, baseline, candidate),
+		None => newest_eligible_stage(component, root, baseline),
+	};
 
 	for entry in read_dir(root) {
 		let path = entry.path();
@@ -172,6 +168,32 @@ pub fn purge(
 				fs::remove_dir_all(&path).or_else(|_| fs::remove_file(&path));
 		}
 	}
+}
+
+fn stage_describing(
+	root: &Path,
+	baseline: &Baseline,
+	candidate: &Candidate,
+) -> Option<PathBuf> {
+	if !candidate.fits(baseline) {
+		return None;
+	}
+	let stage = stage(root, &candidate.tag).ok()?;
+	stage
+		.load()
+		.is_some_and(|staged| staged.describes(candidate))
+		.then_some(stage.dir)
+}
+
+fn newest_eligible_stage(
+	component: &Component,
+	root: &Path,
+	baseline: &Baseline,
+) -> Option<PathBuf> {
+	eligible_stages(component, root, baseline)
+		.filter(|(_, stage, _)| dir_name(&stage.dir).is_some_and(tag_is_safe))
+		.max_by(|(left, ..), (right, ..)| left.cmp(right))
+		.map(|(_, stage, _)| stage.dir)
 }
 
 pub fn resumable(
@@ -321,6 +343,29 @@ mod tests {
 		assert_eq!(stage.load().unwrap(), staged("v0.2.0", "0.2.0", true));
 	}
 
+	fn candidate_for(tag: &str, version: &str, kind: InstallKind) -> Candidate {
+		Candidate {
+			component: "app".into(),
+			kind,
+			tag: tag.to_owned(),
+			version: version.to_owned(),
+			notes: None,
+			published_at: None,
+			payload: super::super::release::Artifact {
+				name: "a.apk".into(),
+				url: "https://git.opengrind.org/a.apk".into(),
+				uuid: "bb49c042".into(),
+				size: 4,
+			},
+			signature: super::super::release::Artifact {
+				name: "a.apk.minisig".into(),
+				url: "https://git.opengrind.org/a.apk.minisig".into(),
+				uuid: "c45b10ab".into(),
+				size: 228,
+			},
+		}
+	}
+
 	#[test]
 	fn purge_keeps_only_the_active_stage() {
 		let root = temp_root();
@@ -328,7 +373,12 @@ mod tests {
 		write_stage(&root, "v0.3.0", "0.3.0", false, b"apk!");
 		fs::create_dir_all(root.join("junk")).unwrap();
 
-		purge(&component::APP, &root, &installed("0.1.0"), Some("v0.3.0"));
+		purge(
+			&component::APP,
+			&root,
+			&installed("0.1.0"),
+			Some(&candidate_for("v0.3.0", "0.3.0", InstallKind::Update)),
+		);
 
 		assert!(!root.join("v0.2.0").exists());
 		assert!(!root.join("junk").exists());
@@ -354,9 +404,96 @@ mod tests {
 		let root = temp_root();
 		write_stage(&root, "v0.2.0", "0.2.0", true, b"apk!");
 
-		purge(&component::APP, &root, &installed("0.2.0"), Some("v0.2.0"));
+		purge(
+			&component::APP,
+			&root,
+			&installed("0.2.0"),
+			Some(&candidate_for("v0.2.0", "0.2.0", InstallKind::Update)),
+		);
 
 		assert!(!root.join("v0.2.0").exists());
+	}
+
+	#[test]
+	fn a_start_keeps_the_stage_of_its_asset_whatever_kind_it_was_staged_as() {
+		let root = temp_root();
+		write_stage(&root, "v0.1.0", "0.1.0", true, b"apk!");
+		let first_install =
+			candidate_for("v0.1.0", "0.1.0", InstallKind::Install);
+
+		purge(
+			&component::APP,
+			&root,
+			&Baseline::Absent,
+			Some(&first_install),
+		);
+
+		assert!(
+			root.join("v0.1.0").join(PAYLOAD_FILE).exists(),
+			"verified bytes for the very asset being installed must be reused"
+		);
+	}
+
+	#[test]
+	fn a_start_drops_a_stage_of_another_asset_under_the_same_tag() {
+		let root = temp_root();
+		write_stage(&root, "v0.1.0", "0.1.0", true, b"apk!");
+		let mut re_uploaded =
+			candidate_for("v0.1.0", "0.1.0", InstallKind::Install);
+		re_uploaded.payload.uuid = "99999999".into();
+
+		purge(
+			&component::APP,
+			&root,
+			&Baseline::Absent,
+			Some(&re_uploaded),
+		);
+
+		assert!(!root.join("v0.1.0").exists());
+	}
+
+	#[test]
+	fn a_start_for_a_candidate_the_target_no_longer_fits_keeps_nothing() {
+		let root = temp_root();
+		write_stage(&root, "v0.1.0", "0.1.0", true, b"apk!");
+
+		purge(
+			&component::APP,
+			&root,
+			&installed("0.1.0"),
+			Some(&candidate_for("v0.1.0", "0.1.0", InstallKind::Install)),
+		);
+
+		assert!(!root.join("v0.1.0").exists());
+	}
+
+	#[test]
+	fn an_opaque_target_purges_every_stage_it_can_never_accept() {
+		let opaque = Baseline::Opaque {
+			name: Some("dev".into()),
+		};
+		for starting in [
+			None,
+			Some(candidate_for("v1.2.0", "1.2.0", InstallKind::Update)),
+		] {
+			let root = temp_root();
+			write_stage(&root, "v1.2.0", "1.2.0", true, b"apk!");
+			write_stage_of(
+				&root,
+				"v1.3.0",
+				"1.3.0",
+				false,
+				b"ap",
+				InstallKind::Install,
+			);
+
+			purge(&component::APP, &root, &opaque, starting.as_ref());
+
+			assert!(
+				!root.join("v1.2.0").exists() && !root.join("v1.3.0").exists(),
+				"no stage is offerable under an opaque version, so none may linger"
+			);
+		}
 	}
 
 	#[test]

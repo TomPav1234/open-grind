@@ -144,14 +144,14 @@ pub async fn update_download(
 	let client = client::build()?;
 	let state = app.state::<UpdateState>();
 	let downloads = &state.inner().downloads;
-	let tag = candidate.tag.clone();
+	let starting = candidate.clone();
 	downloads
 		.start(&app, session.root.clone(), client, candidate, || {
 			storage::purge(
 				component,
 				&session.root,
 				&session.baseline,
-				Some(&tag),
+				Some(&starting),
 			)
 		})
 		.await

@@ -15,6 +15,7 @@ use super::{Phase, Progress, PROGRESS_EVENT};
 
 struct Active {
 	component: String,
+	kind: InstallKind,
 	tag: String,
 	uuid: String,
 	cancel: Arc<AtomicBool>,
@@ -43,6 +44,7 @@ enum Claim {
 
 fn joins_existing(active: &Active, finished: bool, wanted: &Candidate) -> bool {
 	active.component == wanted.component
+		&& active.kind == wanted.kind
 		&& active.tag == wanted.tag
 		&& active.uuid == wanted.payload.uuid
 		&& !finished
@@ -199,6 +201,7 @@ impl Downloads {
 
 		*self.slots.active.lock().unwrap() = Some(Active {
 			component: candidate.component.clone(),
+			kind: candidate.kind,
 			tag: candidate.tag.clone(),
 			uuid: candidate.payload.uuid.clone(),
 			cancel,
@@ -251,6 +254,7 @@ mod tests {
 		(
 			Active {
 				component: "app".into(),
+				kind: InstallKind::Update,
 				tag: "v1".into(),
 				uuid: "uuid".into(),
 				cancel: cancel.clone(),
@@ -402,6 +406,25 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn a_first_install_never_joins_an_update_of_the_same_asset() {
+		let stopped = Arc::new(AtomicBool::new(false));
+		let (active, _) = active_that_stops_when_cancelled(stopped);
+
+		assert!(
+			!joins_existing(
+				&active,
+				false,
+				&Candidate {
+					kind: InstallKind::Install,
+					..offered("v1", "uuid")
+				}
+			),
+			"a joined update would finish with a label the removed target refuses"
+		);
+		active.cancel.store(true, Ordering::SeqCst);
+	}
+
+	#[tokio::test]
 	async fn claiming_the_same_asset_joins_the_transfer_already_running() {
 		let downloads = Downloads::default();
 		let stopped = Arc::new(AtomicBool::new(false));
@@ -544,16 +567,17 @@ mod end_to_end {
 		let unsaved_stage = root.0.join("v1");
 		std::fs::create_dir_all(&unsaved_stage).unwrap();
 		let cleared = AtomicBool::new(false);
+		let running = Candidate {
+			tag: "v1".into(),
+			..candidate(&server.url(), 10)
+		};
 
 		let joined = downloads
 			.start(
 				app.handle(),
 				root.0.clone(),
 				Client::builder().build().expect("client"),
-				Candidate {
-					tag: "v1".into(),
-					..candidate(&server.url(), 10)
-				},
+				running.clone(),
 				|| {
 					cleared.store(true, Ordering::SeqCst);
 					crate::api::update::storage::purge(
@@ -562,7 +586,7 @@ mod end_to_end {
 						&crate::api::update::baseline::Baseline::of_version(
 							semver::Version::new(0, 1, 0),
 						),
-						Some("v1"),
+						Some(&running),
 					);
 				},
 			)
@@ -580,6 +604,182 @@ mod end_to_end {
 		);
 		cancel.store(true, Ordering::SeqCst);
 		downloads.cancel_and_join("app").await;
+	}
+
+	#[tokio::test]
+	async fn a_verified_update_is_installed_from_disk_after_its_target_was_removed(
+	) {
+		use crate::api::update::baseline::Baseline;
+		use crate::api::update::component::GOOGLE_OAUTH;
+		use crate::api::update::storage::{self, Staged};
+
+		let server = testserver::spawn(Plan {
+			body: b"apk!".to_vec(),
+			etag: Some("\"uuid\"".into()),
+			signature_status: Some(404),
+			..Plan::default()
+		})
+		.await;
+		let app = app();
+		let root = root("verified-update-reinstalled");
+		let update = Candidate {
+			component: GOOGLE_OAUTH.key.into(),
+			..candidate(&server.url(), 4)
+		};
+		let stage = storage::stage(&root.0, &update.tag).unwrap();
+		stage.create().unwrap();
+		std::fs::write(stage.payload(), b"apk!").unwrap();
+		stage
+			.save(&Staged {
+				downloaded: 4,
+				verified: true,
+				payload_digest: Some("digest".into()),
+				..Staged::new(&update)
+			})
+			.unwrap();
+		let first_install = Candidate {
+			kind: InstallKind::Install,
+			..update
+		};
+		let downloads = Downloads::default();
+
+		downloads
+			.start(
+				app.handle(),
+				root.0.clone(),
+				Client::builder().build().expect("client"),
+				first_install.clone(),
+				|| {
+					storage::purge(
+						&GOOGLE_OAUTH,
+						&root.0,
+						&Baseline::Absent,
+						Some(&first_install),
+					)
+				},
+			)
+			.await
+			.unwrap();
+
+		let mut settled = None;
+		for _ in 0..400 {
+			match downloads.snapshot().map(|progress| progress.phase) {
+				Some(Phase::Downloading) | None => {
+					tokio::time::sleep(Duration::from_millis(5)).await;
+				}
+				phase => {
+					settled = phase;
+					break;
+				}
+			}
+		}
+		downloads.cancel_and_join(GOOGLE_OAUTH.key).await;
+
+		assert!(
+			matches!(settled, Some(Phase::Ready)),
+			"the verified bytes on disk must be reused, got {settled:?}"
+		);
+		let (_, reused) =
+			storage::verified(&GOOGLE_OAUTH, &root.0, &Baseline::Absent)
+				.expect(
+					"the reused stage must be installable as a first install",
+				);
+		assert_eq!(reused.kind, InstallKind::Install);
+	}
+
+	#[tokio::test]
+	async fn a_first_install_takes_over_a_running_update_and_resumes_its_bytes()
+	{
+		use crate::api::update::component::GOOGLE_OAUTH;
+		use crate::api::update::storage;
+
+		let large: Vec<u8> =
+			(0..8 * 1024 * 1024u32).map(|i| (i % 251) as u8).collect();
+		let server = testserver::spawn(Plan {
+			body: large.clone(),
+			etag: Some("\"uuid\"".into()),
+			pause_every_64k: Some(Duration::from_millis(5)),
+			..Plan::default()
+		})
+		.await;
+		let app = app();
+		let root = root("install-takes-over-update");
+		let downloads = Downloads::default();
+		let client = Client::builder().build().expect("client");
+		let update = Candidate {
+			component: GOOGLE_OAUTH.key.into(),
+			..candidate(&server.url(), large.len() as u64)
+		};
+		let first_install = Candidate {
+			kind: InstallKind::Install,
+			..update.clone()
+		};
+
+		downloads
+			.start(app.handle(), root.0.clone(), client.clone(), update, || ())
+			.await
+			.unwrap();
+		let stage = storage::stage(&root.0, &first_install.tag).unwrap();
+		for _ in 0..400 {
+			if std::fs::metadata(stage.part()).is_ok_and(|m| m.len() > 0) {
+				break;
+			}
+			tokio::time::sleep(Duration::from_millis(5)).await;
+		}
+		assert!(
+			std::fs::metadata(stage.part()).is_ok_and(|m| m.len() > 0),
+			"the update transfer never started writing"
+		);
+
+		let cleared = AtomicBool::new(false);
+		downloads
+			.start(app.handle(), root.0.clone(), client, first_install, || {
+				cleared.store(true, Ordering::SeqCst)
+			})
+			.await
+			.unwrap();
+
+		assert!(
+			cleared.load(Ordering::SeqCst),
+			"a first install joined the running update, so it would finish labelled as an update"
+		);
+		let replaced = downloads
+			.slots
+			.last
+			.lock()
+			.unwrap()
+			.clone()
+			.expect("the update transfer reported how it ended");
+		assert!(
+			matches!(replaced.phase, Phase::Canceled),
+			"the update transfer must be cancelled, got {:?}",
+			replaced.phase
+		);
+		let kept = replaced.received;
+		assert!(kept > 0, "the test needs bytes to have landed");
+
+		let mut range = None;
+		let mut relabelled = None;
+		for _ in 0..400 {
+			range = server.last_range.lock().unwrap().clone();
+			relabelled = stage.load().map(|staged| staged.kind);
+			if range.is_some() && relabelled.is_some() {
+				break;
+			}
+			tokio::time::sleep(Duration::from_millis(5)).await;
+		}
+		downloads.cancel_and_join(GOOGLE_OAUTH.key).await;
+
+		assert_eq!(
+			range,
+			Some(format!("bytes={kept}-")),
+			"the first install must resume the bytes the update kept"
+		);
+		assert_eq!(
+			relabelled,
+			Some(InstallKind::Install),
+			"the resumed stage must be labelled as a first install"
+		);
 	}
 
 	#[tokio::test]
