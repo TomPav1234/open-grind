@@ -4,16 +4,31 @@
 	import { showErrorToast } from "$lib/api/error-toast";
 	import SwitchField from "$lib/components/ui/switch-field/SwitchField.svelte";
 	import { getUpdateSettings, setAutomaticUpdateChecks } from "$lib/updates";
-	import { updatesUnsupportedReason } from "$lib/updates/capability.svelte";
-	import { checkForUpdateNow } from "$lib/updates/updates-manager";
+	import { addonInstallerAvailable } from "$lib/updates/addon.svelte";
+	import {
+		automaticChecksSetting,
+		checkAfterOptIn,
+	} from "$lib/updates/automatic-checks";
+	import {
+		updatesSelfManaged,
+		updatesUnsupportedReason,
+	} from "$lib/updates/capability.svelte";
 
 	let stored = $state<boolean | null>(null);
 	let pending = $state<boolean | null>(null);
 	const value = $derived(pending ?? stored ?? false);
-	const reason = $derived(updatesUnsupportedReason());
+	const addonAvailable = addonInstallerAvailable();
+	const selfManaged = $derived(updatesSelfManaged());
+	const setting = $derived(
+		automaticChecksSetting({
+			selfManaged,
+			unsupportedReason: updatesUnsupportedReason(),
+			addonAvailable,
+		}),
+	);
 
 	onMount(() => {
-		if (reason !== null) return;
+		if (setting.blocked) return;
 		getUpdateSettings()
 			.then((settings) => {
 				stored = settings.autoCheck;
@@ -28,10 +43,9 @@
 </script>
 
 <SwitchField
-	title="Check updates automatically"
-	description={reason ??
-		"Periodically request updates from git.opengrind.org. No personally identifiable information is sent, no requests are stored or analyzed."}
-	disabled={reason !== null || stored === null}
+	title={setting.title}
+	description={setting.description}
+	disabled={setting.blocked || stored === null}
 	bind:checked={
 		() => value,
 		(newValue: boolean) => {
@@ -40,7 +54,9 @@
 				.then((settings) => {
 					stored = settings.autoCheck;
 					pending = null;
-					if (settings.autoCheck) void checkForUpdateNow();
+					if (settings.autoCheck) {
+						void checkAfterOptIn({ selfManaged, addonAvailable });
+					}
 				})
 				.catch((error: unknown) => {
 					pending = null;

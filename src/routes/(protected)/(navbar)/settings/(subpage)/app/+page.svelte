@@ -6,6 +6,7 @@
 	import * as Item from "$lib/components/ui/item";
 	import { hapticsAvailable } from "$lib/haptics";
 	import { desktopEntryAvailable } from "$lib/platform/desktop-entry.svelte";
+	import { addonInstallerAvailable } from "$lib/updates/addon.svelte";
 	import {
 		updatesSelfManaged,
 		updatesUnsupportedReason,
@@ -13,6 +14,7 @@
 	import AppsMenuEntrySetting from "./AppsMenuEntrySetting.svelte";
 	import AutomaticUpdatesSetting from "./AutomaticUpdatesSetting.svelte";
 	import BackdropBlurSetting from "./BackdropBlurSetting.svelte";
+	import CompanionAppSetting from "./CompanionAppSetting.svelte";
 	import PreferenceSwitchSetting from "./PreferenceSwitchSetting.svelte";
 	import UnitsSetting from "./UnitsSetting.svelte";
 </script>
@@ -89,9 +91,12 @@
 	unimplemented: { feature: "Discreet app icon", issue: 97 },
 })}
 {@render item({ title: "PIN", unimplemented: { feature: "PIN", issue: 50 } })}
-{#if updatesSelfManaged() || updatesUnsupportedReason() !== null}
+{#if updatesSelfManaged() || updatesUnsupportedReason() !== null || addonInstallerAvailable()}
 	<h2>Updates</h2>
 	<AutomaticUpdatesSetting />
+	{#if addonInstallerAvailable()}
+		<CompanionAppSetting />
+	{/if}
 {/if}
 <h2>About</h2>
 <Item.Root variant="outline">

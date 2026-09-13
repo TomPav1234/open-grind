@@ -14,14 +14,35 @@
 	import * as Card from "$lib/components/ui/card";
 	import { Label } from "$lib/components/ui/label";
 	import Link from "$lib/components/ui/link/Link.svelte";
+	import { Progress } from "$lib/components/ui/progress";
 	import { Spinner } from "$lib/components/ui/spinner";
 	import { Textarea } from "$lib/components/ui/textarea";
+	import {
+		AddonInstaller,
+		addonInstallerAvailable,
+		addonStageLabel,
+	} from "$lib/updates/addon.svelte";
+
+	const installer = new AddonInstaller();
+	const canInstallHere = addonInstallerAvailable();
+
+	$effect(() => {
+		installer.watch();
+		return () => installer.unwatch();
+	});
 
 	let token = $state("");
 	let submitting = $state(false);
 	let retrying = $state(false);
 
 	let manualInput = $state(false);
+
+	const installerLabel = $derived(
+		addonStageLabel(installer.stage, {
+			installed: installer.installed,
+			installLabel: "Install here",
+		}),
+	);
 
 	async function retry() {
 		if (retrying) return;
@@ -93,6 +114,20 @@
 							>
 								Open Grind companion app
 							</Link>
+							{#if canInstallHere && installer.stage !== "done"}
+								<Button
+									variant="secondary"
+									size="xs"
+									class="ms-1 align-baseline"
+									disabled={installer.busy || retrying}
+									onclick={() => void installer.install()}
+								>
+									{#if installer.busy}
+										<Spinner />
+									{/if}
+									{installerLabel}
+								</Button>
+							{/if}
 						</li>
 						{#if !manualInput}
 							<li>On this screen, tap the "Retry" button</li>
@@ -107,6 +142,32 @@
 							</li>
 						{/if}
 					</ol>
+					{#if installer.stage === "downloading" && installer.total > 0}
+						<Progress
+							value={Math.round(installer.fraction * 100)}
+							aria-label="Downloading the companion app"
+							class="my-2 h-1"
+						/>
+					{/if}
+					<div role="status" aria-live="polite">
+						{#if installer.message}
+							<p class="my-2 text-destructive">
+								{installer.message}
+							</p>
+						{/if}
+						{#if installer.stage === "done"}
+							<p class="my-2">
+								{installer.finishedKind === "update"
+									? "Companion app updated."
+									: "Companion app installed."} Tap "Retry" to continue.
+							</p>
+						{:else if installer.stage === "upToDate"}
+							<p class="my-2">
+								The companion app is up to date. Tap "Retry" to
+								continue.
+							</p>
+						{/if}
+					</div>
 					{#if !manualInput}
 						<div class="my-2 block text-center">
 							or <Button

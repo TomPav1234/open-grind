@@ -18,11 +18,14 @@ Due to platform limitations enforced by Google, it's not possible to log in via 
 
 ### Open Grind Google OAuth app (recommended)
 
-1. Visit the [**Open Grind Google OAuth**](https://git.opengrind.org/open-grind/open-grind-google-oauth-android-app/releases) companion app's Releases page
-2. Download the version matching your device's CPU architecture (98% of devices today support arm64-v8a, so **try arm64-v8a.apk first**)
-3. Install **Open Grind Google OAuth** app on your device
-4. Go to Open Grind sign in screen and tap "Sign in with Google"
-5. You should now have another screen opened with the same "Sign in with Google" button, tap it again and follow the instructions, no further setup needed. If you still see prompts to install the companion app and retrying in the Open Grind app does not help, see [Manual Google OAuth copy-paste](#manual-google-oauth-copy-paste-advanced) section below
+1. Go to Open Grind sign in screen and tap "Sign in with Google"
+2. Tap "Install here" next to **Open Grind companion app**. Open Grind downloads the build matching your device and verifies its signature. The first time, Android asks you to allow Open Grind to install apps: turn the switch on and go back, and the install continues on its own. Then confirm Android's install prompt
+3. Tap "Retry"
+4. You should now have another screen opened with the same "Sign in with Google" button, tap it again and follow the instructions, no further setup needed. If you still see prompts to install the companion app and retrying in the Open Grind app does not help, see [Manual Google OAuth copy-paste](#manual-google-oauth-copy-paste-advanced) section below. If the install button shows "Try again", the message under it says what went wrong.
+
+Once the companion app is installed, you can check it for updates from Settings → App: automatically when "Check updates automatically" is on (on store-installed builds it reads "Check companion app updates automatically"), or anytime with "Check for update".
+
+To install it yourself instead, download the build for your device's CPU architecture from the [companion app's Releases page](https://git.opengrind.org/open-grind/open-grind-google-oauth-android-app/releases) — 98% of devices today support arm64-v8a, so **try arm64-v8a.apk first**.
 
 ### Manual Google OAuth copy-paste (advanced)
 

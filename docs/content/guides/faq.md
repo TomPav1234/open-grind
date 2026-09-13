@@ -49,7 +49,7 @@ The only indirect counters are:
    - Number of registered users on git.opengrind.org (**IP addresses are not stored**)
    - Keep in mind these platforms do not collect or store any personally identifiable data about users
 
-Open Grind has opt-in auto-updater that sends an anonymous request to git.opengrind.org, but these requests are not logged or stored. If you installed the app from F-Droid, Obtainium, Aurora Store or Google Play, or from the `.deb`, the auto-updater is disabled entirely and this does not apply to you. The first-run screen presents this choice with the checkbox pre-checked, nothing is sent until you confirm, and you can change it any time in Settings → App.
+Open Grind has opt-in auto-updater that sends an anonymous request to git.opengrind.org, but these requests are not logged or stored. If you installed the app from F-Droid, Obtainium, Aurora Store or Google Play, or from the `.deb`, Open Grind never updates itself. On Android the only request it can make there is the companion app update check: it is off by default, the first-run screen does not ask about it, and you can turn it on in Settings → App. On other installs, the first-run screen presents this choice with the checkbox pre-checked, nothing is sent until you confirm, and you can change it any time in Settings → App.
 
 **As of September 1st, 2026, the estimated number of users is ~67 000 based on the downloads counter.**
 
