@@ -5,9 +5,10 @@ use tauri::plugin::mobile::PluginInvokeError;
 use tauri::plugin::PluginHandle;
 use tauri::{AppHandle, Manager, Wry};
 
-use super::super::baseline::Baseline;
-use super::super::component::Component;
+use super::super::baseline::{Baseline, InstallKind};
+use super::super::component::{self, Component};
 use super::super::error::UpdateError;
+use super::super::release::Candidate;
 use super::{Outcome, Unsupported};
 
 pub struct AndroidUpdater {
@@ -48,6 +49,13 @@ struct PackageStateRequest<'a> {
 struct PackageStateResponse {
 	installed: bool,
 	version_name: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TransferRequest<'a> {
+	package_name: &'a str,
+	kind: InstallKind,
 }
 
 #[derive(Serialize)]
@@ -154,18 +162,35 @@ pub fn probe_package(app: &AppHandle, package: &str) -> Baseline {
 	}
 }
 
-pub fn hold_process<R: tauri::Runtime>(app: &AppHandle<R>, active: bool) {
+pub fn begin_transfer<R: tauri::Runtime>(
+	app: &AppHandle<R>,
+	candidate: &Candidate,
+) {
 	let Some(state) = app.try_state::<AndroidUpdater>() else {
 		return;
 	};
-	let handle = state.handle.clone();
-	let command = if active {
-		"beginTransfer"
-	} else {
-		"endTransfer"
+	let package_name = component::by_key(&candidate.component)
+		.map_or(component::SELF_PACKAGE, Component::install_target);
+	if let Err(e) = state.handle.run_mobile_plugin::<serde_json::Value>(
+		"beginTransfer",
+		TransferRequest {
+			package_name,
+			kind: candidate.kind,
+		},
+	) {
+		tracing::warn!("[update] beginTransfer failed: {e}");
+	}
+}
+
+pub fn end_transfer<R: tauri::Runtime>(app: &AppHandle<R>) {
+	let Some(state) = app.try_state::<AndroidUpdater>() else {
+		return;
 	};
-	if let Err(e) = handle.run_mobile_plugin::<serde_json::Value>(command, ()) {
-		tracing::warn!("[update] {command} failed: {e}");
+	if let Err(e) = state
+		.handle
+		.run_mobile_plugin::<serde_json::Value>("endTransfer", ())
+	{
+		tracing::warn!("[update] endTransfer failed: {e}");
 	}
 }
 

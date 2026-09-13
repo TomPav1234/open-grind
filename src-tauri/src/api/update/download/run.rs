@@ -23,15 +23,15 @@ const MAX_ATTEMPTS: u32 = 60;
 struct ProcessHold<'a, R: Runtime>(&'a AppHandle<R>);
 
 impl<'a, R: Runtime> ProcessHold<'a, R> {
-	fn new(app: &'a AppHandle<R>) -> Self {
-		super::super::install::hold_process(app, true);
+	fn new(app: &'a AppHandle<R>, candidate: &Candidate) -> Self {
+		super::super::install::begin_transfer(app, candidate);
 		Self(app)
 	}
 }
 
 impl<R: Runtime> Drop for ProcessHold<'_, R> {
 	fn drop(&mut self) {
-		super::super::install::hold_process(self.0, false);
+		super::super::install::end_transfer(self.0);
 	}
 }
 
@@ -59,7 +59,7 @@ pub(super) async fn run<R: Runtime>(
 	let mut digest = verify::Prehash::default();
 	retained.restore(&stage, candidate, &mut staged, &mut digest)?;
 
-	let _hold = ProcessHold::new(app);
+	let _hold = ProcessHold::new(app, candidate);
 	let signature_abort = Arc::new(AtomicBool::new(false));
 	let signature = {
 		let client = client.clone();

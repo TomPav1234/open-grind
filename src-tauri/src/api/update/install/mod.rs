@@ -129,7 +129,7 @@ use android as platform;
 use desktop as platform;
 
 pub use platform::{
-	enforce_home, hold_process, install, install_pending,
+	begin_transfer, end_transfer, enforce_home, install, install_pending,
 	open_install_permission_settings, sweep_replaced, take_outcome,
 	watch_install,
 };

@@ -90,7 +90,13 @@ pub async fn install(
 	}
 }
 
-pub fn hold_process<R: tauri::Runtime>(_app: &AppHandle<R>, _active: bool) {}
+pub fn begin_transfer<R: tauri::Runtime>(
+	_app: &AppHandle<R>,
+	_candidate: &super::super::release::Candidate,
+) {
+}
+
+pub fn end_transfer<R: tauri::Runtime>(_app: &AppHandle<R>) {}
 
 pub fn install_pending(_app: &AppHandle) -> bool {
 	false

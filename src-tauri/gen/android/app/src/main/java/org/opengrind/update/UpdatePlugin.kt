@@ -32,6 +32,12 @@ internal class PackageArgs {
 }
 
 @InvokeArg
+internal class TransferArgs {
+	lateinit var packageName: String
+	lateinit var kind: String
+}
+
+@InvokeArg
 internal class WatchArgs {
 	lateinit var onEvent: Channel
 }
@@ -181,7 +187,12 @@ class UpdatePlugin(private val activity: Activity) : Plugin(activity) {
 
 	@Command
 	fun beginTransfer(invoke: Invoke) {
-		runCatching { TransferService.start(activity) }
+		val args = runCatching { invoke.parseArgs(TransferArgs::class.java) }.getOrNull()
+		val title = TransferTitle.of(
+			updatesThisApp = args == null || args.packageName == activity.packageName,
+			kind = args?.kind,
+		)
+		runCatching { TransferService.start(context = activity, title = title) }
 		invoke.resolve()
 	}
 
