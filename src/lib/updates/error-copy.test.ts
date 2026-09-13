@@ -28,9 +28,9 @@ describe("copy for an installed package signed by someone else", () => {
 		).toBe("The installed app isn't signed by Open Grind");
 	});
 
-	it("tells the user to uninstall the impostor companion app", () => {
+	it("tells the user to uninstall the impostor Google OAuth app", () => {
 		const text =
-			"The installed companion app isn't signed by Open Grind. Uninstall it to install the official one.";
+			"The installed Google OAuth app isn't signed by Open Grind. Uninstall it to install the official one.";
 
 		expect(
 			unsupportedText(
@@ -55,9 +55,9 @@ describe("copy for an installed package signed by someone else", () => {
 });
 
 describe("copy for an Open Grind build signed by someone else", () => {
-	it("blames this build, not the companion app, when the companion app cannot be installed", () => {
+	it("blames this build, not the Google OAuth app, when the Google OAuth app cannot be installed", () => {
 		const text =
-			"This copy of Open Grind isn't signed by Open Grind, so it can't install the companion app";
+			"This copy of Open Grind isn't signed by Open Grind, so it can't install the Google OAuth app";
 
 		expect(
 			unsupportedText(
@@ -83,7 +83,7 @@ describe("copy for an Open Grind build signed by someone else", () => {
 describe("copy for a release index with nothing to install", () => {
 	it("says no release is published yet instead of blaming the device", () => {
 		expect(noReleaseText({ component: GOOGLE_OAUTH_COMPONENT })).toBe(
-			"No companion app release is published yet",
+			"No Google OAuth app release is published yet",
 		);
 		expect(noReleaseText({ component: APP_COMPONENT })).toBe(
 			"No Open Grind release is published yet",
@@ -112,9 +112,13 @@ describe("copy for an install the system refused", () => {
 		[
 			GOOGLE_OAUTH_COMPONENT,
 			"install",
-			"Couldn't install the companion app",
+			"Couldn't install the Google OAuth app",
 		],
-		[GOOGLE_OAUTH_COMPONENT, "update", "Couldn't update the companion app"],
+		[
+			GOOGLE_OAUTH_COMPONENT,
+			"update",
+			"Couldn't update the Google OAuth app",
+		],
 	] as const)(
 		"words a %s %s by what was installed",
 		(component, kind, text) => {
@@ -138,14 +142,14 @@ describe("copy for an install the system refused", () => {
 				component: GOOGLE_OAUTH_COMPONENT,
 				kind: "install",
 			}),
-		).toBe("Not enough storage to install the companion app");
+		).toBe("Not enough storage to install the Google OAuth app");
 		expect(
 			installFailedText({
 				code,
 				component: GOOGLE_OAUTH_COMPONENT,
 				kind: "update",
 			}),
-		).toBe("Not enough storage to update the companion app");
+		).toBe("Not enough storage to update the Google OAuth app");
 	});
 
 	it.each([1, 4, 6, -18, -20, -110])(
@@ -157,7 +161,7 @@ describe("copy for an install the system refused", () => {
 					component: GOOGLE_OAUTH_COMPONENT,
 					kind: "install",
 				}),
-			).toBe("Couldn't install the companion app");
+			).toBe("Couldn't install the Google OAuth app");
 		},
 	);
 });
@@ -172,7 +176,7 @@ describe("copy for a download refused while another one runs", () => {
 		[
 			APP_COMPONENT,
 			GOOGLE_OAUTH_COMPONENT,
-			"Wait for the companion app to finish downloading",
+			"Wait for the Google OAuth app to finish downloading",
 		],
 	] as const)(
 		"tells the %s flow which download is running",
@@ -217,11 +221,11 @@ describe("copy for a release replaced after its one automatic retry", () => {
 
 describe("the subject line under a problem", () => {
 	it.each([
-		"Couldn't install the companion app",
-		"Couldn't update the companion app",
-		"Failed to verify the companion app",
-		"No companion app release is published yet",
-		"The installed companion app isn't signed by Open Grind. Uninstall it to install the official one.",
+		"Couldn't install the Google OAuth app",
+		"Couldn't update the Google OAuth app",
+		"Failed to verify the Google OAuth app",
+		"No Google OAuth app release is published yet",
+		"The installed Google OAuth app isn't signed by Open Grind. Uninstall it to install the official one.",
 	])("is left out when the title says %s", (title) => {
 		expect(problemBody({ component: GOOGLE_OAUTH_COMPONENT, title })).toBe(
 			undefined,
@@ -233,9 +237,9 @@ describe("the subject line under a problem", () => {
 		"Another download is already running",
 		"Finish the other install first",
 		"The release changed during the download. Try again.",
-	])("names the companion app under %s", (title) => {
+	])("names the Google OAuth app under %s", (title) => {
 		expect(problemBody({ component: GOOGLE_OAUTH_COMPONENT, title })).toBe(
-			"Companion app",
+			"Google OAuth app",
 		);
 	});
 

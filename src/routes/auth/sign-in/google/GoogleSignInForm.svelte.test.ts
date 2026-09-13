@@ -124,7 +124,7 @@ describe("GoogleSignInForm", () => {
 		vi.restoreAllMocks();
 	});
 
-	it("offers to install the missing companion app", async () => {
+	it("offers to install the missing Google OAuth app", async () => {
 		const { screen } = await opened();
 
 		expect(api.getInstalledVersion).toHaveBeenCalledWith("google-oauth");
@@ -225,7 +225,7 @@ describe("GoogleSignInForm", () => {
 		expect(api.installUpdate).toHaveBeenCalledTimes(2);
 	});
 
-	it("continues in the companion app when it was installed meanwhile", async () => {
+	it("continues in the Google OAuth app when it was installed meanwhile", async () => {
 		callMethodMock.mockReturnValue(new Promise(() => {}));
 		const { fireEvent } = await opened();
 		api.getInstalledVersion.mockResolvedValue("1.1.0");
@@ -273,7 +273,7 @@ describe("GoogleSignInForm", () => {
 		expect(api.checkForUpdate).not.toHaveBeenCalled();
 	});
 
-	it("opens the release page on a device the companion app has no build for", async () => {
+	it("opens the release page on a device the Google OAuth app has no build for", async () => {
 		readiness["google-oauth"] = {
 			state: "unsupported",
 			detail: {
@@ -341,7 +341,7 @@ describe("GoogleSignInForm", () => {
 		expect(screen.getByLabelText("Token")).toBeTruthy();
 	});
 
-	it("returns to the install when the companion app cannot be opened", async () => {
+	it("returns to the install when the Google OAuth app cannot be opened", async () => {
 		api.getInstalledVersion.mockResolvedValue("1.1.0");
 		const { fireEvent } = await opened();
 		callMethodMock.mockRejectedValue({
@@ -367,7 +367,7 @@ describe("GoogleSignInForm", () => {
 		});
 	});
 
-	it("stays on Continue when the companion app is turned off", async () => {
+	it("stays on Continue when the Google OAuth app is turned off", async () => {
 		api.getInstalledVersion.mockResolvedValue("1.1.0");
 		const { screen, fireEvent } = await opened();
 		callMethodMock.mockRejectedValue({
@@ -387,7 +387,7 @@ describe("GoogleSignInForm", () => {
 		expect(api.checkForUpdate).not.toHaveBeenCalled();
 	});
 
-	it("tries the companion app again once the screen is shown again", async () => {
+	it("tries the Google OAuth app again once the screen is shown again", async () => {
 		api.getInstalledVersion.mockResolvedValue("1.1.0");
 		const { fireEvent } = await opened();
 		callMethodMock.mockRejectedValue({
@@ -460,7 +460,7 @@ describe("GoogleSignInForm", () => {
 		expect(button("Install")).toHaveProperty("disabled", false);
 	});
 
-	it("falls back to the pasted token when the companion app is untrusted", async () => {
+	it("falls back to the pasted token when the Google OAuth app is untrusted", async () => {
 		api.getInstalledVersion.mockResolvedValue("1.1.0");
 		const { screen, fireEvent } = await opened();
 		const { untrustedCompanionMessage } = await import("$lib/api/sign-in");
@@ -478,7 +478,7 @@ describe("GoogleSignInForm", () => {
 		expect(screen.getByLabelText("Token")).toBeTruthy();
 	});
 
-	it("blames this build, not the companion app, when a build Open Grind didn't sign is refused", async () => {
+	it("blames this build, not the Google OAuth app, when a build Open Grind didn't sign is refused", async () => {
 		getUpdateCapability.mockResolvedValue({
 			state: "unsupported",
 			detail: { reason: "foreignSigner" },
@@ -532,7 +532,7 @@ describe("GoogleSignInForm", () => {
 		expect(button("Continue")).toBeTruthy();
 	});
 
-	it("withdraws the companion app update offer once the app is found uninstalled", async () => {
+	it("withdraws the Google OAuth app update offer once the app is found uninstalled", async () => {
 		api.getInstalledVersion.mockResolvedValue("1.1.0");
 		await opened();
 		const { addonActivity, addonUpdates } = await addonFlow();
@@ -550,7 +550,7 @@ describe("GoogleSignInForm", () => {
 		expect(button("Install")).toBeTruthy();
 	});
 
-	it("withdraws a companion app update offer left from before the screen opened", async () => {
+	it("withdraws a Google OAuth app update offer left from before the screen opened", async () => {
 		const { addonActivity, addonUpdates } = await addonFlow();
 		api.checkForUpdate.mockResolvedValue(offer("update"));
 		await addonUpdates.checkNow();
@@ -562,7 +562,7 @@ describe("GoogleSignInForm", () => {
 		expect(api.discardStagedUpdate).toHaveBeenCalledWith("google-oauth");
 	});
 
-	it("withdraws a paused companion app update once the app is found uninstalled", async () => {
+	it("withdraws a paused Google OAuth app update once the app is found uninstalled", async () => {
 		const { addonActivity, addonUpdates } = await addonFlow();
 		api.checkForUpdate.mockResolvedValue(offer("update"));
 		await addonUpdates.checkNow();
@@ -575,7 +575,7 @@ describe("GoogleSignInForm", () => {
 		expect(api.discardStagedUpdate).toHaveBeenCalledWith("google-oauth");
 	});
 
-	it("withdraws a downloaded companion app update once the app is found uninstalled", async () => {
+	it("withdraws a downloaded Google OAuth app update once the app is found uninstalled", async () => {
 		readiness["google-oauth"] = ready("update");
 		const { addonActivity, addonUpdates } = await addonFlow();
 		await addonUpdates.start();
@@ -635,7 +635,7 @@ describe("GoogleSignInForm", () => {
 		expectBusy("Downloading…");
 	});
 
-	it("keeps the companion app update offer while the app is still installed", async () => {
+	it("keeps the Google OAuth app update offer while the app is still installed", async () => {
 		api.getInstalledVersion.mockResolvedValue("1.1.0");
 		await opened();
 		const { addonActivity, addonUpdates } = await addonFlow();
@@ -649,7 +649,7 @@ describe("GoogleSignInForm", () => {
 		expect(api.discardStagedUpdate).not.toHaveBeenCalled();
 	});
 
-	it("keeps the companion app update offer when the probe fails", async () => {
+	it("keeps the Google OAuth app update offer when the probe fails", async () => {
 		api.getInstalledVersion.mockResolvedValue("1.1.0");
 		await opened();
 		const { addonActivity, addonUpdates } = await addonFlow();
@@ -684,7 +684,7 @@ describe("GoogleSignInForm", () => {
 		expect(button("Continue")).toBeTruthy();
 	});
 
-	it("switches between the companion app and the pasted token", async () => {
+	it("switches between the Google OAuth app and the pasted token", async () => {
 		const { screen, fireEvent } = await opened();
 
 		await fireEvent.click(button("paste the OAuth token manually"));

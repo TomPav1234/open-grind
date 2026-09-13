@@ -117,19 +117,19 @@ describe("the add-on activity the sign-in screen observes", () => {
 		expect(addonActivity.stage).toBeNull();
 	});
 
-	it("says the companion app is up to date when a tap finds nothing newer", async () => {
+	it("says the Google OAuth app is up to date when a tap finds nothing newer", async () => {
 		const { addonUpdates } = await import("./addon.svelte");
 		api.checkForUpdate.mockResolvedValue(upToDate);
 
 		await addonUpdates.installNow();
 
 		expect(toasts.showUpToDate).toHaveBeenCalledExactlyOnceWith(
-			"The companion app is up to date",
+			"The Google OAuth app is up to date",
 		);
 	});
 });
 
-describe("where the companion app can be installed from here", () => {
+describe("where the Google OAuth app can be installed from here", () => {
 	beforeEach(() => {
 		vi.resetModules();
 		vi.clearAllMocks();
@@ -157,7 +157,7 @@ describe("where the companion app can be installed from here", () => {
 		expect(addonInstallerAvailable()).toBe(true);
 	});
 
-	it("is not on a build someone else signed, which the companion app refuses", async () => {
+	it("is not on a build someone else signed, which the Google OAuth app refuses", async () => {
 		await probedCapability({
 			state: "unsupported",
 			detail: { reason: "foreignSigner" },
@@ -186,7 +186,7 @@ describe("where the companion app can be installed from here", () => {
 	});
 });
 
-describe("whether the companion app is published for this device", () => {
+describe("whether the Google OAuth app is published for this device", () => {
 	beforeEach(() => {
 		vi.resetModules();
 		vi.clearAllMocks();

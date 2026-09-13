@@ -157,7 +157,7 @@
 		<Card.Header>
 			<Card.Title>Signing you in</Card.Title>
 			<Card.Description>
-				Finishing the Google sign-in from the companion app.
+				Finishing the sign-in from the Google OAuth app.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="flex justify-center py-4">

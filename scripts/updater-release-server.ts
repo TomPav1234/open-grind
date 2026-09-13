@@ -86,7 +86,7 @@ const harness = await startServer({
 						tag: Bun.env.COMPANION_TAG ?? "v99.0.0",
 						suffix: companionSuffix(companionAbi),
 						uuid: "dev-companion-uuid",
-						notes: "Local companion app release.",
+						notes: "Local Google OAuth app release.",
 					},
 				]
 			: []),

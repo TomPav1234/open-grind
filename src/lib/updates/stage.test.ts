@@ -35,23 +35,23 @@ function bodies(subject: CopySubject) {
 describe("the stage toast title", () => {
 	it("says update while an installed add-on updates", () => {
 		expect(titles({ component: "google-oauth", kind: "update" })).toEqual({
-			available: "Companion app update available",
-			downloading: "Downloading the companion app update…",
-			verifying: "Verifying the companion app update…",
-			paused: "Companion app update is available",
-			ready: "Companion app update is downloaded",
-			installing: "Updating the companion app…",
+			available: "Google OAuth app update available",
+			downloading: "Downloading the Google OAuth app update…",
+			verifying: "Verifying the Google OAuth app update…",
+			paused: "Google OAuth app update is available",
+			ready: "Google OAuth app update is downloaded",
+			installing: "Updating the Google OAuth app…",
 		});
 	});
 
 	it("says install while an add-on installs for the first time", () => {
 		expect(titles({ component: "google-oauth", kind: "install" })).toEqual({
-			available: "Companion app is available",
-			downloading: "Downloading the companion app…",
-			verifying: "Verifying the companion app…",
-			paused: "Companion app is ready to download",
-			ready: "Companion app is downloaded",
-			installing: "Installing the companion app…",
+			available: "Google OAuth app is available",
+			downloading: "Downloading the Google OAuth app…",
+			verifying: "Verifying the Google OAuth app…",
+			paused: "Google OAuth app is ready to download",
+			ready: "Google OAuth app is downloaded",
+			installing: "Installing the Google OAuth app…",
 		});
 	});
 

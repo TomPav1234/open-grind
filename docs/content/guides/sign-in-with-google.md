@@ -14,7 +14,7 @@ Just download the app and tap "Sign in with Google" on the login screen.
 
 ## Android
 
-Due to platform limitations enforced by Google, it's not possible to log in via the Open Grind app itself. Read the technical in-depth explanation below. **For Android specifically, Open Grind supports signing in with Google via the companion app or manual token paste.**
+Due to platform limitations enforced by Google, it's not possible to log in via the Open Grind app itself. Read the technical in-depth explanation below. **For Android specifically, Open Grind supports signing in with Google via the Google OAuth app or manual token paste.**
 
 ### Open Grind Google OAuth app (recommended)
 
@@ -25,13 +25,13 @@ Due to platform limitations enforced by Google, it's not possible to log in via 
 5. Tap "Continue"
 6. You should now have another screen opened with the same "Sign in with Google" button, tap it again and follow the instructions, no further setup needed
 
-If you install the companion app another way while this screen is open, come back to Open Grind and the screen shows "Continue": tap it. If the install fails, the message at the top of the screen says what went wrong, and you can tap "Install" again. If it still does not work, tap "paste the OAuth token manually" under the card and follow [Manual Google OAuth copy-paste](#manual-google-oauth-copy-paste-advanced) below. To get back from the token form, tap "use the Open Grind Google OAuth app".
+If you install the Google OAuth app another way while this screen is open, come back to Open Grind and the screen shows "Continue": tap it. If the install fails, the message at the top of the screen says what went wrong, and you can tap "Install" again. If it still does not work, tap "paste the OAuth token manually" under the card and follow [Manual Google OAuth copy-paste](#manual-google-oauth-copy-paste-advanced) below. To get back from the token form, tap "use the Open Grind Google OAuth app".
 
-If Open Grind says the companion app is turned off, turn it on in Android settings and try again. If it says the installed companion app isn't signed by Open Grind, uninstall that app and install the official one.
+If Open Grind says the Google OAuth app is turned off, turn it on in Android settings and try again. If it says the installed Google OAuth app isn't signed by Open Grind, uninstall that app and install the official one.
 
-Once the companion app is installed, you can check it for updates from Settings → App: automatically when "Check updates automatically" is on (on store-installed builds it reads "Check add-on updates automatically"), or anytime with "Check for updates".
+Once the Google OAuth app is installed, you can check it for updates from Settings → App: automatically when "Check updates automatically" is on (on store-installed builds it reads "Check add-on updates automatically"), or anytime with "Check for updates".
 
-To install it yourself instead, download the build for your device's CPU architecture from the [companion app's Releases page](https://git.opengrind.org/open-grind/open-grind-google-oauth-android-app/releases) — 98% of devices today support arm64-v8a, so **try arm64-v8a.apk first**.
+To install it yourself instead, download the build for your device's CPU architecture from the [Google OAuth app's Releases page](https://git.opengrind.org/open-grind/open-grind-google-oauth-android-app/releases) — 98% of devices today support arm64-v8a, so **try arm64-v8a.apk first**.
 
 ### Manual Google OAuth copy-paste (advanced)
 
@@ -43,7 +43,7 @@ To install it yourself instead, download the build for your device's CPU archite
 4. Go to Open Grind sign in with Google screen and tap "paste the OAuth token manually"
 5. Paste the copied token and tap "Sign in"
 
-**If you have Firefox or Librewolf installed (Desktop/Android), Google Chrome or Chromium-based browsers (Desktop only, there are no extensions in Google Chrome for Android),** you have an option to avoid using the companion app altogether.
+**If you have Firefox or Librewolf installed (Desktop/Android), Google Chrome or Chromium-based browsers (Desktop only, there are no extensions in Google Chrome for Android),** you have an option to avoid using the Google OAuth app altogether.
 
 1. Install the [**Grindr Google OAuth WebExtension**](https://git.opengrind.org/open-grind/grindr-google-oauth-webextension#install) in your browser
 2. In the extensions list in the browser toolbar, click on the **extension's icon**
@@ -54,7 +54,7 @@ To install it yourself instead, download the build for your device's CPU archite
 
 ### Why a separate app? (technical in-depth explanation)
 
-This section answers some questions on why the decision to release a separate companion app for Android was made. It's intended for technical experts who have some knowledge of mobile development and are familiar with the OAuth protocol.
+This section answers some questions on why the decision to release a separate Google OAuth app for Android was made. It's intended for technical experts who have some knowledge of mobile development and are familiar with the OAuth protocol.
 
 *Full discussion: https://git.opengrind.org/open-grind/open-grind/issues/27*
 

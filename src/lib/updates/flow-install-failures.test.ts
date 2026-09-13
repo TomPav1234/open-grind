@@ -30,10 +30,10 @@ beforeEach(() => {
 
 describe("an install that does not go through", () => {
 	it.each<[InstallKind, string]>([
-		["update", "problem:Couldn't update the companion app"],
-		["install", "problem:Couldn't install the companion app"],
+		["update", "problem:Couldn't update the Google OAuth app"],
+		["install", "problem:Couldn't install the Google OAuth app"],
 	])(
-		"names a companion app %s the system refused to install",
+		"names a Google OAuth app %s the system refused to install",
 		async (kind, problem) => {
 			readiness["google-oauth"] = ready(kind);
 			api.installUpdate.mockRejectedValue({ kind: "install" });
@@ -46,11 +46,15 @@ describe("an install that does not go through", () => {
 	);
 
 	it.each<[ComponentKey, InstallKind, string]>([
-		["google-oauth", "update", "problem:Couldn't update the companion app"],
+		[
+			"google-oauth",
+			"update",
+			"problem:Couldn't update the Google OAuth app",
+		],
 		[
 			"google-oauth",
 			"install",
-			"problem:Couldn't install the companion app",
+			"problem:Couldn't install the Google OAuth app",
 		],
 		["app", "update", "problem:Couldn't install the update"],
 	])(
@@ -75,25 +79,31 @@ describe("an install that does not go through", () => {
 	);
 
 	it.each<[InstallKind, string]>([
-		["install", "problem:Not enough storage to install the companion app"],
-		["update", "problem:Not enough storage to update the companion app"],
-	])("says storage ran out for a companion app %s", async (kind, problem) => {
-		readiness["google-oauth"] = ready(kind);
-		const { flow, view } = await flowFor("google-oauth");
-		await flow.installNow();
+		[
+			"install",
+			"problem:Not enough storage to install the Google OAuth app",
+		],
+		["update", "problem:Not enough storage to update the Google OAuth app"],
+	])(
+		"says storage ran out for a Google OAuth app %s",
+		async (kind, problem) => {
+			readiness["google-oauth"] = ready(kind);
+			const { flow, view } = await flowFor("google-oauth");
+			await flow.installNow();
 
-		emitOutcome(
-			outcomeOf("google-oauth", {
-				succeeded: false,
-				code: -4,
-				message:
-					"INSTALL_FAILED_INSUFFICIENT_STORAGE: Failed to allocate",
-			}),
-		);
-		await settled();
+			emitOutcome(
+				outcomeOf("google-oauth", {
+					succeeded: false,
+					code: -4,
+					message:
+						"INSTALL_FAILED_INSUFFICIENT_STORAGE: Failed to allocate",
+				}),
+			);
+			await settled();
 
-		expect(view.problems()).toEqual([problem]);
-	});
+			expect(view.problems()).toEqual([problem]);
+		},
+	);
 
 	it.each<[ComponentKey, InstallKind]>([
 		["google-oauth", "install"],
@@ -118,7 +128,7 @@ describe("an install that does not go through", () => {
 		},
 	);
 
-	it("names the companion app when its store owns its updates", async () => {
+	it("names the Google OAuth app when its store owns its updates", async () => {
 		readiness["google-oauth"] = {
 			state: "unsupported",
 			detail: {
@@ -131,7 +141,7 @@ describe("an install that does not go through", () => {
 		await flow.installNow();
 
 		expect(view.problems()).toEqual([
-			"problem:The store that installed the companion app manages its updates",
+			"problem:The store that installed the Google OAuth app manages its updates",
 		]);
 	});
 });

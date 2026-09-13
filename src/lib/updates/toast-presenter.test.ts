@@ -18,18 +18,23 @@ beforeEach(() => {
 	vi.clearAllMocks();
 });
 
-describe("a companion app problem toast", () => {
-	it("does not repeat the companion app under a title that names it", () => {
+describe("a Google OAuth app problem toast", () => {
+	it("does not repeat the Google OAuth app under a title that names it", () => {
 		toastPresenter("google-oauth").problem(
-			"Couldn't install the companion app",
+			"Couldn't install the Google OAuth app",
 		);
 
 		expect(toasts.showProblem.mock.calls).toEqual([
-			[{ title: "Couldn't install the companion app", body: undefined }],
+			[
+				{
+					title: "Couldn't install the Google OAuth app",
+					body: undefined,
+				},
+			],
 		]);
 	});
 
-	it("names the companion app under a title that does not", () => {
+	it("names the Google OAuth app under a title that does not", () => {
 		toastPresenter("google-oauth").problem(
 			"Couldn't reach the release server",
 		);
@@ -38,7 +43,7 @@ describe("a companion app problem toast", () => {
 			[
 				{
 					title: "Couldn't reach the release server",
-					body: "Companion app",
+					body: "Google OAuth app",
 				},
 			],
 		]);

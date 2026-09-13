@@ -8,7 +8,7 @@ import {
 } from "./google-sign-in-view";
 
 describe("the Google sign-in view", () => {
-	it("offers the install while the companion app is missing", () => {
+	it("offers the install while the Google OAuth app is missing", () => {
 		expect(
 			googleSignInView({
 				automated: true,
@@ -18,7 +18,7 @@ describe("the Google sign-in view", () => {
 		).toBe("install");
 	});
 
-	it("offers to continue once the companion app is installed", () => {
+	it("offers to continue once the Google OAuth app is installed", () => {
 		expect(
 			googleSignInView({
 				automated: true,

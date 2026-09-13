@@ -63,31 +63,31 @@ const copy: Record<KnownKind, string> = {
 
 const addonUnsupportedCopy: Partial<Record<Unsupported["reason"], string>> = {
 	externallyManaged:
-		"The store that installed the companion app manages its updates",
+		"The store that installed the Google OAuth app manages its updates",
 	foreignSigner:
-		"This copy of Open Grind isn't signed by Open Grind, so it can't install the companion app",
+		"This copy of Open Grind isn't signed by Open Grind, so it can't install the Google OAuth app",
 	foreignTarget:
-		"The installed companion app isn't signed by Open Grind. Uninstall it to install the official one.",
-	noReleaseArtifacts: "The companion app isn't published for this device",
+		"The installed Google OAuth app isn't signed by Open Grind. Uninstall it to install the official one.",
+	noReleaseArtifacts: "The Google OAuth app isn't published for this device",
 	undetermined:
-		"Open Grind can't tell whether it may install the companion app",
+		"Open Grind can't tell whether it may install the Google OAuth app",
 };
 
 const addonCopy: Partial<Record<KnownKind, string>> = {
-	unsigned: "Failed to verify the companion app",
-	signature: "Failed to verify the companion app",
-	storage: "Couldn't save the companion app download",
-	install: "Couldn't install the companion app",
+	unsigned: "Failed to verify the Google OAuth app",
+	signature: "Failed to verify the Google OAuth app",
+	storage: "Couldn't save the Google OAuth app download",
+	install: "Couldn't install the Google OAuth app",
 };
 
 const addonUpdateCopy: Partial<Record<KnownKind, string>> = {
-	install: "Couldn't update the companion app",
+	install: "Couldn't update the Google OAuth app",
 };
 
 const busyCopy: Record<ComponentKey, string> = {
 	[APP_COMPONENT]: "Wait for the Open Grind update to finish downloading",
 	[GOOGLE_OAUTH_COMPONENT]:
-		"Wait for the companion app to finish downloading",
+		"Wait for the Google OAuth app to finish downloading",
 };
 
 const busyDetailSchema = z.object({
@@ -98,11 +98,11 @@ const PACKAGE_MANAGER_INSTALL_FAILED_INSUFFICIENT_STORAGE = -4;
 
 const noStorageCopy: Record<typeof APP_COMPONENT | Release["kind"], string> = {
 	[APP_COMPONENT]: "Not enough storage to install the update",
-	install: "Not enough storage to install the companion app",
-	update: "Not enough storage to update the companion app",
+	install: "Not enough storage to install the Google OAuth app",
+	update: "Not enough storage to update the Google OAuth app",
 };
 
-const COMPANION_SUBJECT = "Companion app";
+const GOOGLE_OAUTH_SUBJECT = "Google OAuth app";
 
 export function unsupportedText(
 	{ reason }: Unsupported | Pick<Unsupported, "reason">,
@@ -120,7 +120,7 @@ export function noReleaseText({
 }): string {
 	return component === APP_COMPONENT
 		? "No Open Grind release is published yet"
-		: "No companion app release is published yet";
+		: "No Google OAuth app release is published yet";
 }
 
 export function updateErrorText(
@@ -173,6 +173,10 @@ export function problemBody({
 	component: ComponentKey;
 	title: string;
 }): string | undefined {
-	const named = title.toLowerCase().includes(COMPANION_SUBJECT.toLowerCase());
-	return component === APP_COMPONENT || named ? undefined : COMPANION_SUBJECT;
+	const named = title
+		.toLowerCase()
+		.includes(GOOGLE_OAUTH_SUBJECT.toLowerCase());
+	return component === APP_COMPONENT || named
+		? undefined
+		: GOOGLE_OAUTH_SUBJECT;
 }

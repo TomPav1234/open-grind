@@ -42,20 +42,20 @@ const appTitles: Record<UpdateStage, string> = {
 
 const addonTitles: Record<Release["kind"], Record<UpdateStage, string>> = {
 	install: {
-		available: "Companion app is available",
-		downloading: "Downloading the companion app…",
-		verifying: "Verifying the companion app…",
-		paused: "Companion app is ready to download",
-		ready: "Companion app is downloaded",
-		installing: "Installing the companion app…",
+		available: "Google OAuth app is available",
+		downloading: "Downloading the Google OAuth app…",
+		verifying: "Verifying the Google OAuth app…",
+		paused: "Google OAuth app is ready to download",
+		ready: "Google OAuth app is downloaded",
+		installing: "Installing the Google OAuth app…",
 	},
 	update: {
-		available: "Companion app update available",
-		downloading: "Downloading the companion app update…",
-		verifying: "Verifying the companion app update…",
-		paused: "Companion app update is available",
-		ready: "Companion app update is downloaded",
-		installing: "Updating the companion app…",
+		available: "Google OAuth app update available",
+		downloading: "Downloading the Google OAuth app update…",
+		verifying: "Verifying the Google OAuth app update…",
+		paused: "Google OAuth app update is available",
+		ready: "Google OAuth app update is downloaded",
+		installing: "Updating the Google OAuth app…",
 	},
 };
 

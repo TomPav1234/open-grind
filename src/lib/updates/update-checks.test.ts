@@ -252,11 +252,11 @@ describe("the Check for updates action", () => {
 		expect(toasts.showUpToDate).not.toHaveBeenCalled();
 		expect(toasts.showProblem).toHaveBeenCalledExactlyOnceWith({
 			title: "Couldn't check for updates",
-			body: "Companion app",
+			body: "Google OAuth app",
 		});
 	});
 
-	it("does not repeat the companion app under a title that names it", async () => {
+	it("does not repeat the Google OAuth app under a title that names it", async () => {
 		updatesApi.getInstalledVersion.mockRejectedValue({
 			kind: "unsupported",
 			detail: { reason: "foreignTarget" },
@@ -265,7 +265,7 @@ describe("the Check for updates action", () => {
 		await checkForUpdatesNow(storeBuild);
 
 		expect(toasts.showProblem).toHaveBeenCalledExactlyOnceWith({
-			title: "The installed companion app isn't signed by Open Grind. Uninstall it to install the official one.",
+			title: "The installed Google OAuth app isn't signed by Open Grind. Uninstall it to install the official one.",
 			body: undefined,
 		});
 	});

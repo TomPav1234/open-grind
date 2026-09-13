@@ -141,7 +141,7 @@ describe("SignInForm", () => {
 		);
 	});
 
-	it("sends a missing companion app to the Google sign-in screen", async () => {
+	it("sends a missing Google OAuth app to the Google sign-in screen", async () => {
 		callMethodMock.mockRejectedValue({
 			kind: "Auth",
 			message: "companion-unavailable",
@@ -159,7 +159,7 @@ describe("SignInForm", () => {
 		expect(toastMock.error).not.toHaveBeenCalled();
 	});
 
-	it("stays on the login screen when the companion app is turned off", async () => {
+	it("stays on the login screen when the Google OAuth app is turned off", async () => {
 		callMethodMock.mockRejectedValue({
 			kind: "Auth",
 			message: "companion-disabled",
@@ -177,7 +177,7 @@ describe("SignInForm", () => {
 		expect(gotoMock).not.toHaveBeenCalled();
 	});
 
-	it("sends an untrusted companion app straight to the pasted token", async () => {
+	it("sends an untrusted Google OAuth app straight to the pasted token", async () => {
 		callMethodMock.mockRejectedValue({
 			kind: "Auth",
 			message: "companion-untrusted",
@@ -197,7 +197,7 @@ describe("SignInForm", () => {
 		);
 	});
 
-	it("blames this build, not the companion app, when a build Open Grind didn't sign is refused", async () => {
+	it("blames this build, not the Google OAuth app, when a build Open Grind didn't sign is refused", async () => {
 		capability.buildSignedByOpenGrind.mockReturnValue(false);
 		callMethodMock.mockRejectedValue({
 			kind: "Auth",

@@ -23,7 +23,7 @@ export const companionUnavailable = "companion-unavailable";
 export const companionUntrusted = "companion-untrusted";
 export const companionDisabled = "companion-disabled";
 export const untrustedCompanionMessage =
-	"An app using the companion's name is installed but isn't signed by Open Grind, so its token was refused. Uninstall it, or paste the OAuth token manually.";
+	"The installed Open Grind Google OAuth app isn't signed by Open Grind, so its token was refused. Uninstall it, or paste the OAuth token manually.";
 export const foreignBuildCompanionMessage =
 	"This copy of Open Grind isn't signed by Open Grind, so the Open Grind Google OAuth app can't sign it in. Paste the OAuth token manually.";
 export const disabledCompanionMessage =

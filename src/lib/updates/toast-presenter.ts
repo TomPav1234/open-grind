@@ -22,6 +22,6 @@ export function toastPresenter(component: ComponentKey): StagePresenter {
 			if (component === APP_COMPONENT) void showInstalled();
 			else showAddonInstalled({ component, tag, kind });
 		},
-		upToDate: () => showUpToDate("The companion app is up to date"),
+		upToDate: () => showUpToDate("The Google OAuth app is up to date"),
 	};
 }

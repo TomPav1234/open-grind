@@ -218,7 +218,7 @@ export OPEN_GRIND_UPDATE_KEY=<printed key>
 
 Both variables are read only under `debug_assertions` ([dev.rs](./src-tauri/src/api/update/dev.rs)). Run `adb reverse tcp:8787 tcp:8787` to tunnel to an Android device. On Android the debug build instead reads the same two assignments from `/data/local/tmp/open-grind-update.env` on the device — `e2e/updater/run.ts android` pushes it automatically, or `adb push` it when testing by hand.
 
-The dev server also serves a companion app release when given `COMPANION_PAYLOAD=<apk>` (tag `COMPANION_TAG`, default `v99.0.0`; `COMPANION_ABI` one of `arm64-v8a`, `v7a`, `x86_64`, default `arm64-v8a`); without `PAYLOAD`, `APP_BUNDLE`, `ARTIFACT` or `SUFFIX` it serves only the companion.
+The dev server also serves a Google OAuth app release when given `COMPANION_PAYLOAD=<apk>` (tag `COMPANION_TAG`, default `v99.0.0`; `COMPANION_ABI` one of `arm64-v8a`, `v7a`, `x86_64`, default `arm64-v8a`); without `PAYLOAD`, `APP_BUNDLE`, `ARTIFACT` or `SUFFIX` it serves only the companion.
 
 `cargo test --lib -- --ignored live_` runs the end-to-end check, download and signature tests against the dev server. It needs both releases: this machine's app artifact (`ARTIFACT=zip` on macOS) and `COMPANION_PAYLOAD` with the default `COMPANION_ABI`. When serving only the app, run `cargo test --lib -- --ignored live_published live_release_host` instead.
 

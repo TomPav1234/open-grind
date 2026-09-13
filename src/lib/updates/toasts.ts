@@ -117,8 +117,8 @@ export function showAddonInstalled({
 }): void {
 	const done =
 		kind === "install"
-			? "Companion app installed"
-			: "Companion app updated";
+			? "Google OAuth app installed"
+			: "Google OAuth app updated";
 	toast.custom(ToastCard, {
 		...PLACEMENT,
 		id: `${INSTALLED_TOAST}:${component}`,
