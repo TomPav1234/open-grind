@@ -4,6 +4,7 @@
 	import { Input } from "$lib/components/ui/input";
 	import { Spinner } from "$lib/components/ui/spinner";
 	import * as ToggleGroup from "$lib/components/ui/toggle-group";
+	import { isFilterableTagKey } from "$lib/model/browse/grid/filters";
 	import type { Tag } from "$lib/model/users/tags";
 	import FilterDropdown from "./FilterDropdown.svelte";
 
@@ -49,6 +50,8 @@
 
 	const tagsPromise = $derived(load());
 
+	const isListed = (tag: Tag) => isFilterableTagKey(tag.key);
+
 	const valueLabel = $derived(value.join(", "));
 </script>
 
@@ -86,7 +89,9 @@
 		{:then { categories, flat }}
 			{@const filtered = query
 				? flat
-						.filter((t) => t.textLower.includes(query))
+						.filter(
+							(t) => t.textLower.includes(query) && isListed(t),
+						)
 						.sort(
 							(a, b) =>
 								Number(b.textLower.startsWith(query)) -
@@ -133,13 +138,14 @@
 					{/if}
 				{:else}
 					{#each categories as category, catIndex (category.text)}
-						{#if category.tags.length > 0 && (expanded || catIndex < 2)}
+						{@const tags = category.tags.filter(isListed)}
+						{#if tags.length > 0 && (expanded || catIndex < 2)}
 							<div
 								class="mt-1.5 mb-1 w-full px-1 text-3xs font-semibold tracking-wider text-muted-foreground uppercase"
 							>
 								{category.text}
 							</div>
-							{#each category.tags as tag (tag.tagId)}
+							{#each tags as tag (tag.tagId)}
 								<ToggleGroup.Item value={tag.text}>
 									{tag.text}
 								</ToggleGroup.Item>

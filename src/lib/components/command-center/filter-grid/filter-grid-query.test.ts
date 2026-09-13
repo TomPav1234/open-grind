@@ -116,6 +116,12 @@ describe("parseFilterGridQuery", () => {
 		expect(parsedAt(genders.parsed, 0).valueText).toBe("Not specified, 42");
 	});
 
+	it("flags the Trans tribe as invalid because it moved to genders", () => {
+		const result = parseFilterGridQuery("?tribes=1,11");
+		expect(parsedAt(result.parsed, 0).valid).toBe(false);
+		expect(result.filters.tribesEnabled).toBe(false);
+	});
+
 	it("flags unknown keys as invalid", () => {
 		const result = parseFilterGridQuery("?nope=1");
 		expect(parsedAt(result.parsed, 0).valid).toBe(false);

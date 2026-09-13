@@ -13,6 +13,7 @@ import {
 	filterPositionSchema,
 	filterWeightSchema,
 	gridSearchFiltersSchema,
+	isFilterableTagKey,
 } from "$lib/model/browse/grid/filters";
 
 describe("grid search filter schemas", () => {
@@ -48,5 +49,13 @@ describe("grid search filter schemas", () => {
 	it("accepts not-specified (-1) alongside gender ids", () => {
 		expect(filterGendersSchema.parse([-1, 42])).toEqual([-1, 42]);
 		expect(filterGendersSchema.safeParse([-2]).success).toBe(false);
+	});
+});
+
+describe("filterable values", () => {
+	it("hides the tags that moved to genders", () => {
+		expect(isFilterableTagKey("ftm")).toBe(false);
+		expect(isFilterableTagKey("mtf")).toBe(false);
+		expect(isFilterableTagKey("coffee")).toBe(true);
 	});
 });

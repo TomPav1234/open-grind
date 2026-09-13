@@ -2,6 +2,7 @@ import type z from "zod";
 
 import {
 	type GridSearchFilters,
+	isFilterableTribe,
 	WEIGHT_KG_MAX,
 	WEIGHT_KG_MIN,
 } from "$lib/model/browse/grid/filters";
@@ -15,6 +16,7 @@ export function buildCascadeQuery({
 	filters: GridSearchFilters | null;
 }): z.infer<typeof cascadeV4QuerySchema> {
 	if (!filters) return { nearbyGeoHash: geohash };
+	const tribes = filters.tribes.filter(isFilterableTribe);
 	return {
 		nearbyGeoHash: geohash,
 		favorites: filters.isFavorite || undefined,
@@ -32,7 +34,7 @@ export function buildCascadeQuery({
 			filters.photos.includes("has-albums") && { hasAlbum: true }),
 		...(filters.photosEnabled &&
 			filters.photos.includes("has-face-pics") && { faceOnly: true }),
-		...(filters.tribesEnabled && { tribes: filters.tribes }),
+		...(filters.tribesEnabled && tribes.length > 0 && { tribes }),
 		...(filters.bodyTypesEnabled && { bodyTypes: filters.bodyTypes }),
 		...(filters.heightEnabled && {
 			heightCmMin: filters.height[0],

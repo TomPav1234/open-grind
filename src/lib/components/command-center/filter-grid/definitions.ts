@@ -14,6 +14,7 @@ import {
 	type GridSearchFilters,
 	HEIGHT_CM_MAX,
 	HEIGHT_CM_MIN,
+	isFilterableTribe,
 	WEIGHT_KG_MAX,
 	WEIGHT_KG_MIN,
 } from "$lib/model/browse/grid/filters";
@@ -261,7 +262,11 @@ export const filters: Filter[] = [
 		keys: ["tribes", "tribe"],
 		target: "tribes",
 		enabled: "tribesEnabled",
-		enumObject: FilterTribe,
+		enumObject: Object.fromEntries(
+			Object.entries(FilterTribe).filter(([, id]) =>
+				isFilterableTribe(id),
+			),
+		),
 		labelMap: tribes,
 	}),
 	enumFilter({

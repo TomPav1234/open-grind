@@ -35,6 +35,11 @@ export const filterGendersSchema = z.array(
 export const filterTagsEnabledSchema = z.boolean();
 export const filterTagsSchema = z.array(z.string());
 
+const TAG_KEYS_MOVED_TO_GENDERS = ["ftm", "mtf"];
+
+export const isFilterableTagKey = (key: string) =>
+	!TAG_KEYS_MOVED_TO_GENDERS.includes(key);
+
 export const filterPositionEnabledSchema = z.boolean();
 export const FilterPosition = { ...SexualPosition, NotSpecified: -1 } as const;
 export type FilterPositionId =
@@ -50,6 +55,8 @@ export const filterTribesEnabledSchema = z.boolean();
 export const FilterTribe = { ...Tribe, NotSpecified: -1 } as const;
 export type FilterTribeId = (typeof FilterTribe)[keyof typeof FilterTribe];
 export const filterTribesSchema = z.array(z.enum(FilterTribe));
+
+export const isFilterableTribe = (id: number) => id !== Tribe.Trans;
 
 export const filterBodyTypeEnabledSchema = z.boolean();
 export const FilterBodyType = { ...BodyType, NotSpecified: -1 } as const;
