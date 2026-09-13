@@ -15,6 +15,10 @@ export function googleSignInView({
 	return installed ? "continue" : "install";
 }
 
+export function stageAwaitsUser(stage: UpdateStage | null): boolean {
+	return stage === "available" || stage === "paused" || stage === "ready";
+}
+
 export function installButton({
 	stage,
 	starting,

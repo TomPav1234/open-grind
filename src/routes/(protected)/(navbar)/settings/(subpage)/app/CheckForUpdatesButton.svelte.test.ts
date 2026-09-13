@@ -20,7 +20,11 @@ vi.mock("$lib/updates/update-checks", () => checks);
 import CheckForUpdatesButton from "./CheckForUpdatesButton.svelte";
 
 function action() {
-	return screen.getByRole("button", { name: /Check for updates/ });
+	return screen.getByRole("button", { name: "Check for updates" });
+}
+
+function spinner() {
+	return screen.queryByRole("status", { hidden: true });
 }
 
 describe("CheckForUpdatesButton", () => {
@@ -55,14 +59,15 @@ describe("CheckForUpdatesButton", () => {
 			selfManaged: true,
 			addonAvailable: true,
 		});
-		expect(screen.queryByRole("status")).toBeNull();
+		expect(spinner()).toBeNull();
+		expect(action().getAttribute("aria-busy")).toBe("false");
 
 		await fireEvent.click(action());
 
 		expect(action().hasAttribute("disabled")).toBe(true);
-		expect(screen.getByRole("status").getAttribute("aria-label")).toBe(
-			"Checking for updates",
-		);
+		expect(action().getAttribute("aria-busy")).toBe("true");
+		expect(spinner()).not.toBeNull();
+		expect(screen.queryByRole("status")).toBeNull();
 		await fireEvent.click(action());
 		expect(checks.checkForUpdatesNow).toHaveBeenCalledOnce();
 
@@ -70,6 +75,6 @@ describe("CheckForUpdatesButton", () => {
 		await vi.waitFor(() =>
 			expect(action().hasAttribute("disabled")).toBe(false),
 		);
-		expect(screen.queryByRole("status")).toBeNull();
+		expect(spinner()).toBeNull();
 	});
 });

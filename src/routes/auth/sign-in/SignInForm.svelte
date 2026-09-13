@@ -189,9 +189,10 @@
 				type="submit"
 				class="w-full"
 				disabled={submitting !== false}
+				aria-busy={submitting === "password"}
 			>
 				{#if submitting === "password"}
-					<Spinner />
+					<Spinner aria-hidden="true" />
 				{/if}
 				Sign in
 			</Button>
@@ -200,10 +201,11 @@
 				variant="outline"
 				class="w-full"
 				disabled={submitting !== false}
+				aria-busy={submitting === "google"}
 				onclick={() => signInWith("google")}
 			>
 				{#if submitting === "google"}
-					<Spinner />
+					<Spinner aria-hidden="true" />
 				{:else}
 					<SiGoogle class="size-4" aria-hidden="true" />
 				{/if}
@@ -214,10 +216,11 @@
 				variant="outline"
 				class="w-full"
 				disabled={submitting !== false}
+				aria-busy={submitting === "facebook"}
 				onclick={() => signInWith("facebook")}
 			>
 				{#if submitting === "facebook"}
-					<Spinner />
+					<Spinner aria-hidden="true" />
 				{:else}
 					<SiFacebook class="size-4" aria-hidden="true" />
 				{/if}

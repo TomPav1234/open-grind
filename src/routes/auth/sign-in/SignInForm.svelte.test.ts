@@ -191,6 +191,38 @@ describe("SignInForm", () => {
 		);
 	});
 
+	it("keeps the password button's name while it signs in", async () => {
+		callMethodMock.mockReturnValue(new Promise(() => {}));
+		render(SignInForm);
+
+		await submitSignIn();
+
+		const busy = screen.getByRole("button", { name: "Sign in" });
+		expect(busy.getAttribute("aria-busy")).toBe("true");
+		expect(
+			screen
+				.getByRole("button", { name: "Sign in with Google" })
+				.getAttribute("aria-busy"),
+		).toBe("false");
+	});
+
+	it.each(["Google", "Facebook"])(
+		"keeps the %s button's name while it signs in",
+		async (vendor) => {
+			callMethodMock.mockReturnValue(new Promise(() => {}));
+			render(SignInForm);
+			const name = `Sign in with ${vendor}`;
+
+			await fireEvent.click(screen.getByRole("button", { name }));
+			await settle();
+
+			const busy = screen.getByRole("button", { name });
+			expect(busy).toHaveProperty("disabled", true);
+			expect(busy.getAttribute("aria-busy")).toBe("true");
+			expect(screen.queryByRole("status")).toBeNull();
+		},
+	);
+
 	it("still reports an ordinary API failure", async () => {
 		callMethodMock.mockRejectedValue({
 			kind: "Api",

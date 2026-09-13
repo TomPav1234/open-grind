@@ -17,10 +17,12 @@ import {
 	outcomeOf,
 	progressOf,
 	ready,
+	resumable,
 	settled,
 	toastsFake,
 	updateApiFake,
 } from "$lib/updates/updates-test-helpers";
+import type { Capability } from "$lib/updates/types";
 
 const COMPANION_RELEASES =
 	"https://git.opengrind.org/open-grind/open-grind-google-oauth-android-app/releases#install";
@@ -36,7 +38,9 @@ const {
 	toastMock,
 	platform,
 	openExternalLink,
+	getUpdateCapability,
 } = vi.hoisted(() => ({
+	getUpdateCapability: vi.fn<() => Promise<Capability>>(),
 	callMethodMock: vi.fn(),
 	gotoMock: vi.fn(),
 	pageMock: { url: new URL("http://localhost/") },
@@ -56,6 +60,7 @@ vi.mock("$lib/updates/index", async () => ({
 	...(await import("$lib/updates/types")),
 	...(await import("$lib/updates/components")),
 	...fake.api,
+	getUpdateCapability,
 }));
 vi.mock("$lib/updates/toasts", () => toasts);
 vi.mock("$lib/platform/os", () => platform);
@@ -63,8 +68,16 @@ vi.mock("$lib/platform/link-opener", () => ({ openExternalLink }));
 
 let testing: typeof import("@testing-library/svelte");
 
+const releaseSigned: Capability = {
+	state: "supported",
+	detail: { payloadSuffix: "-android.apk", canInstallNow: true },
+};
+
 async function opened() {
 	testing = await import("@testing-library/svelte");
+	const { hydrateUpdateCapability } =
+		await import("$lib/updates/capability.svelte");
+	await hydrateUpdateCapability();
 	const { default: GoogleSignInForm } =
 		await import("./GoogleSignInForm.svelte");
 	testing.render(GoogleSignInForm);
@@ -74,6 +87,16 @@ async function opened() {
 
 function button(name: string) {
 	return testing.screen.getByRole("button", { name });
+}
+
+function expectBusy(name: string) {
+	const busy = button(name);
+	expect(busy).toHaveProperty("disabled", true);
+	expect(busy.getAttribute("aria-busy")).toBe("true");
+}
+
+async function addonFlow() {
+	return import("$lib/updates/addon.svelte");
 }
 
 function textOf(element: HTMLElement) {
@@ -93,6 +116,7 @@ describe("GoogleSignInForm", () => {
 		pageMock.url = new URL(SCREEN_URL);
 		platform.isAndroidPlatform.mockReturnValue(true);
 		api.checkForUpdate.mockResolvedValue(offer("install"));
+		getUpdateCapability.mockResolvedValue(releaseSigned);
 		vi.spyOn(console, "error").mockImplementation(() => {});
 	});
 
@@ -114,6 +138,7 @@ describe("GoogleSignInForm", () => {
 		expect(releasePage.textContent).toBe("Open Grind Google OAuth app");
 		expect(releasePage).toHaveProperty("href", COMPANION_RELEASES);
 		expect(button("Install")).toHaveProperty("disabled", false);
+		expect(button("Install").getAttribute("aria-busy")).toBe("false");
 		expect(screen.getByRole("link", { name: "Go back" })).toBeTruthy();
 		expect(button("paste the OAuth token manually")).toBeTruthy();
 		expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
@@ -132,7 +157,7 @@ describe("GoogleSignInForm", () => {
 				view: expect.objectContaining({ stage: "downloading" }),
 			}),
 		);
-		expect(button("Loading Downloading…")).toHaveProperty("disabled", true);
+		expectBusy("Downloading…");
 		expect(screen.queryByRole("progressbar")).toBeNull();
 
 		readiness["google-oauth"] = ready("install");
@@ -140,7 +165,7 @@ describe("GoogleSignInForm", () => {
 			progressOf("google-oauth", { phase: "ready", received: 100 }),
 		);
 		await settled();
-		expect(button("Loading Installing…")).toHaveProperty("disabled", true);
+		expectBusy("Installing…");
 
 		api.getInstalledVersion.mockResolvedValue("1.2.0");
 		emitOutcome(outcomeOf("google-oauth"));
@@ -158,12 +183,12 @@ describe("GoogleSignInForm", () => {
 
 		await fireEvent.click(button("Install"));
 		await settled();
-		expect(button("Loading Downloading…")).toHaveProperty("disabled", true);
+		expectBusy("Downloading…");
 
 		testing.cleanup();
 		await opened();
 
-		expect(button("Loading Downloading…")).toHaveProperty("disabled", true);
+		expectBusy("Downloading…");
 	});
 
 	it("offers the install again after a failed download", async () => {
@@ -184,7 +209,7 @@ describe("GoogleSignInForm", () => {
 
 		await fireEvent.click(button("Install"));
 		await settled();
-		expect(button("Loading Installing…")).toHaveProperty("disabled", true);
+		expectBusy("Installing…");
 
 		emitOutcome(
 			outcomeOf("google-oauth", { succeeded: false, canceled: true }),
@@ -207,7 +232,7 @@ describe("GoogleSignInForm", () => {
 
 		expect(callMethodMock).toHaveBeenCalledWith("login_with_google");
 		expect(api.checkForUpdate).not.toHaveBeenCalled();
-		expect(button("Loading Continue")).toHaveProperty("disabled", true);
+		expectBusy("Continue");
 	});
 
 	it("follows a newer probe that answers before the one Install started", async () => {
@@ -231,7 +256,7 @@ describe("GoogleSignInForm", () => {
 
 		expect(callMethodMock).toHaveBeenCalledWith("login_with_google");
 		expect(api.checkForUpdate).not.toHaveBeenCalled();
-		expect(button("Loading Continue")).toHaveProperty("disabled", true);
+		expectBusy("Continue");
 	});
 
 	it("opens the release page where the app cannot install it", async () => {
@@ -243,6 +268,31 @@ describe("GoogleSignInForm", () => {
 
 		expect(openExternalLink).toHaveBeenCalledWith(COMPANION_RELEASES);
 		expect(api.checkForUpdate).not.toHaveBeenCalled();
+	});
+
+	it("sends a build Open Grind didn't sign to the release page and the pasted token", async () => {
+		getUpdateCapability.mockResolvedValue({
+			state: "unsupported",
+			detail: { reason: "foreignSigner" },
+		});
+		const { screen, fireEvent } = await opened();
+
+		expect(
+			screen.getByRole("link", { name: "Open Grind Google OAuth app" }),
+		).toHaveProperty("href", COMPANION_RELEASES);
+		await fireEvent.click(button("Install"));
+		await settled();
+
+		expect(openExternalLink).toHaveBeenCalledExactlyOnceWith(
+			COMPANION_RELEASES,
+		);
+		expect(api.checkForUpdate).not.toHaveBeenCalled();
+		expect(api.startUpdateDownload).not.toHaveBeenCalled();
+		expect(button("Install")).toHaveProperty("disabled", false);
+
+		await fireEvent.click(button("paste the OAuth token manually"));
+
+		expect(screen.getByLabelText("Token")).toBeTruthy();
 	});
 
 	it("returns to the install when the companion app cannot be opened", async () => {
@@ -265,10 +315,10 @@ describe("GoogleSignInForm", () => {
 		await settled();
 
 		expect(callMethodMock).toHaveBeenCalledOnce();
-		expect(api.checkForUpdate).toHaveBeenCalledWith(
-			"manual",
-			"google-oauth",
-		);
+		expect(api.checkForUpdate).toHaveBeenCalledWith({
+			trigger: "manual",
+			component: "google-oauth",
+		});
 	});
 
 	it("stays on Continue when the companion app is turned off", async () => {
@@ -410,6 +460,139 @@ describe("GoogleSignInForm", () => {
 		await settled();
 
 		expect(button("Continue")).toBeTruthy();
+	});
+
+	it("withdraws the companion app update offer once the app is found uninstalled", async () => {
+		api.getInstalledVersion.mockResolvedValue("1.1.0");
+		await opened();
+		const { addonActivity, addonUpdates } = await addonFlow();
+		api.checkForUpdate.mockResolvedValue(offer("update"));
+		await addonUpdates.checkNow();
+		expect(addonActivity.stage).toBe("available");
+
+		api.getInstalledVersion.mockResolvedValue(null);
+		document.dispatchEvent(new Event("visibilitychange"));
+		await settled();
+
+		expect(addonActivity.stage).toBeNull();
+		expect(toasts.dismissStage).toHaveBeenCalledWith("google-oauth");
+		expect(api.discardStagedUpdate).toHaveBeenCalledWith("google-oauth");
+		expect(button("Install")).toBeTruthy();
+	});
+
+	it("withdraws a companion app update offer left from before the screen opened", async () => {
+		const { addonActivity, addonUpdates } = await addonFlow();
+		api.checkForUpdate.mockResolvedValue(offer("update"));
+		await addonUpdates.checkNow();
+		expect(addonActivity.stage).toBe("available");
+
+		await opened();
+
+		expect(addonActivity.stage).toBeNull();
+		expect(api.discardStagedUpdate).toHaveBeenCalledWith("google-oauth");
+	});
+
+	it("withdraws a paused companion app update once the app is found uninstalled", async () => {
+		const { addonActivity, addonUpdates } = await addonFlow();
+		api.checkForUpdate.mockResolvedValue(offer("update"));
+		await addonUpdates.checkNow();
+		emitProgress(progressOf("google-oauth", { phase: "canceled" }));
+		expect(addonActivity.stage).toBe("paused");
+
+		await opened();
+
+		expect(addonActivity.stage).toBeNull();
+		expect(api.discardStagedUpdate).toHaveBeenCalledWith("google-oauth");
+	});
+
+	it("withdraws a downloaded companion app update once the app is found uninstalled", async () => {
+		readiness["google-oauth"] = ready("update");
+		const { addonActivity, addonUpdates } = await addonFlow();
+		await addonUpdates.start();
+		expect(addonActivity.stage).toBe("ready");
+
+		await opened();
+
+		expect(addonActivity.stage).toBeNull();
+		expect(api.discardStagedUpdate).toHaveBeenCalledWith("google-oauth");
+	});
+
+	it("keeps a first install that resumed downloading after a reload", async () => {
+		api.getUpdateProgress.mockResolvedValue(progressOf("google-oauth"));
+		readiness["google-oauth"] = resumable("install");
+		const { addonActivity, addonUpdates } = await addonFlow();
+		await addonUpdates.start();
+		expect(addonActivity.stage).toBe("downloading");
+
+		await opened();
+		document.dispatchEvent(new Event("visibilitychange"));
+		await settled();
+
+		expect(api.discardStagedUpdate).not.toHaveBeenCalled();
+		expect(addonActivity.stage).toBe("downloading");
+		expectBusy("Downloading…");
+	});
+
+	it("finishes withdrawing a stale update offer before Install looks for a download", async () => {
+		const { fireEvent } = await opened();
+		const { addonActivity, addonUpdates } = await addonFlow();
+		api.checkForUpdate.mockResolvedValue(offer("update"));
+		await addonUpdates.checkNow();
+		expect(addonActivity.stage).toBe("available");
+		let finishDiscard: () => void = () => {};
+		api.discardStagedUpdate.mockReturnValueOnce(
+			new Promise((resolve) => {
+				finishDiscard = () => resolve(undefined);
+			}),
+		);
+		api.checkForUpdate.mockClear().mockResolvedValue(offer("install"));
+		api.getUpdateReadiness.mockClear();
+
+		await fireEvent.click(button("Install"));
+		await settled();
+
+		expect(api.discardStagedUpdate).toHaveBeenCalledExactlyOnceWith(
+			"google-oauth",
+		);
+		expect(api.getUpdateReadiness).not.toHaveBeenCalled();
+		expect(api.checkForUpdate).not.toHaveBeenCalled();
+
+		finishDiscard();
+		await settled();
+
+		expect(api.getUpdateReadiness).toHaveBeenCalledWith("google-oauth");
+		expect(api.startUpdateDownload).toHaveBeenCalledWith("google-oauth");
+		expectBusy("Downloading…");
+	});
+
+	it("keeps the companion app update offer while the app is still installed", async () => {
+		api.getInstalledVersion.mockResolvedValue("1.1.0");
+		await opened();
+		const { addonActivity, addonUpdates } = await addonFlow();
+		api.checkForUpdate.mockResolvedValue(offer("update"));
+		await addonUpdates.checkNow();
+
+		document.dispatchEvent(new Event("visibilitychange"));
+		await settled();
+
+		expect(addonActivity.stage).toBe("available");
+		expect(api.discardStagedUpdate).not.toHaveBeenCalled();
+	});
+
+	it("keeps the companion app update offer when the probe fails", async () => {
+		api.getInstalledVersion.mockResolvedValue("1.1.0");
+		await opened();
+		const { addonActivity, addonUpdates } = await addonFlow();
+		api.checkForUpdate.mockResolvedValue(offer("update"));
+		await addonUpdates.checkNow();
+
+		api.getInstalledVersion.mockRejectedValue(new Error("plugin gone"));
+		document.dispatchEvent(new Event("visibilitychange"));
+		await settled();
+
+		expect(addonActivity.stage).toBe("available");
+		expect(api.discardStagedUpdate).not.toHaveBeenCalled();
+		expect(button("Install")).toBeTruthy();
 	});
 
 	it("keeps the newest probe when an earlier one answers last", async () => {

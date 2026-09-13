@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import type { UpdateStage } from "$lib/updates/stage";
-import { googleSignInView, installButton } from "./google-sign-in-view";
+import {
+	googleSignInView,
+	installButton,
+	stageAwaitsUser,
+} from "./google-sign-in-view";
 
 describe("the Google sign-in view", () => {
 	it("offers the install while the companion app is missing", () => {
@@ -41,6 +45,25 @@ describe("the Google sign-in view", () => {
 					installed,
 				}),
 			).toBe("paste");
+		}
+	});
+});
+
+describe("an add-on stage the screen may withdraw", () => {
+	it("is one that waits for the user to tap it", () => {
+		for (const stage of ["available", "paused", "ready"] as const) {
+			expect(stageAwaitsUser(stage)).toBe(true);
+		}
+	});
+
+	it("is never a download or install that is still running", () => {
+		for (const stage of [
+			null,
+			"downloading",
+			"verifying",
+			"installing",
+		] as const) {
+			expect(stageAwaitsUser(stage)).toBe(false);
 		}
 	});
 });

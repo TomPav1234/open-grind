@@ -27,7 +27,11 @@
 		addonInstallerAvailable,
 		addonUpdates,
 	} from "$lib/updates/addon.svelte";
-	import { googleSignInView, installButton } from "./google-sign-in-view";
+	import {
+		googleSignInView,
+		installButton,
+		stageAwaitsUser,
+	} from "./google-sign-in-view";
 
 	const COMPANION_RELEASES =
 		"https://git.opengrind.org/open-grind/open-grind-google-oauth-android-app/releases#install";
@@ -63,12 +67,16 @@
 	async function probeInstalled(): Promise<boolean> {
 		if (!automated) return false;
 		const probe = ++probes;
-		const version = await getInstalledVersion(GOOGLE_OAUTH_COMPONENT).catch(
-			() => null,
+		const presence = await getInstalledVersion(GOOGLE_OAUTH_COMPONENT).then(
+			(version) => (version === null ? "absent" : "present"),
+			() => "unknown",
 		);
 		if (probe > answered) {
 			answered = probe;
-			installed = version !== null;
+			installed = presence === "present";
+			if (presence === "absent" && stageAwaitsUser(addonActivity.stage)) {
+				await addonUpdates.withdrawUpdate();
+			}
 		}
 		return installed;
 	}
@@ -218,10 +226,11 @@
 						<Button
 							class="w-full"
 							disabled={install.busy}
+							aria-busy={install.busy}
 							onclick={installCompanion}
 						>
 							{#if install.busy}
-								<Spinner />
+								<Spinner aria-hidden="true" />
 							{/if}
 							{install.label}
 						</Button>
@@ -229,10 +238,11 @@
 						<Button
 							class="w-full"
 							disabled={continuing}
+							aria-busy={continuing}
 							onclick={continueInCompanion}
 						>
 							{#if continuing}
-								<Spinner />
+								<Spinner aria-hidden="true" />
 							{/if}
 							Continue
 						</Button>

@@ -40,7 +40,7 @@
 			</Item.Content>
 			{#if checking}
 				<Item.Actions class="min-w-0">
-					<Spinner aria-label="Checking for updates" />
+					<Spinner aria-hidden="true" />
 				</Item.Actions>
 			{/if}
 		</button>
