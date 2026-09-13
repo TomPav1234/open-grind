@@ -25,11 +25,21 @@ class InstallResultReceiver : android.content.BroadcastReceiver() {
 			return
 		}
 		if (ApkInstaller.replacesThisApp(context, target)) {
-			UpdateLedger.record(context, status, packageManagerStatus, message)
+			UpdateLedger.record(
+				context = context,
+				status = status,
+				packageManagerStatus = packageManagerStatus,
+				message = message,
+			)
 		}
 		if (live) {
 			InstallEvents.deliver(
-				InstallStatus.outcomeOf(status, packageManagerStatus, message, target),
+				InstallStatus.outcomeOf(
+					status = status,
+					packageManagerStatus = packageManagerStatus,
+					message = message,
+					packageName = target,
+				),
 			)
 		}
 	}
