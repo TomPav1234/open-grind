@@ -2,9 +2,8 @@ import { $ } from "bun";
 
 // Desktop: bun run.ts demo
 // Mobile using nix (adb, jdk, ndk): nix develop ../.. --command bun run.ts android
-// Companion add-on on a device: bun run.ts android-addon, with ADDON=install (default) or ADDON=update
 // Pass `--rebuild` to force new fixtures
-// Pass `--keep-data` to `android` to leave the app's data in place instead of clearing it
+// Pass `--keep-data` to leave the app's data in place instead of clearing it
 // - `FAIL=drop|server|signature|oversize|unsigned` to inject a failure
 // - `RATE` to throttle
 // - `PORT` to specify port

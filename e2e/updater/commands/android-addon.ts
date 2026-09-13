@@ -51,6 +51,7 @@ export async function androidAddon({
 }: {
 	force: boolean;
 }): Promise<void> {
+	const mode = addonMode();
 	requireMinisign();
 	if (localCompanion && !(await Bun.file(localCompanion).exists())) {
 		throw new Error(`${localCompanion} does not exist`);
@@ -70,11 +71,11 @@ export async function androidAddon({
 	await installApk(appApk);
 	await clearAppData();
 	await uninstallPackage(companionPackage);
-	if (addonMode === "update") await installApk(payload);
+	if (mode === "update") await installApk(payload);
 	const companionVersion = await packageVersionName(companionPackage);
 	const tag =
 		Bun.env.COMPANION_TAG ??
-		(addonMode === "install"
+		(mode === "install"
 			? companionRelease
 			: nextPatchTag(companionVersion));
 
@@ -93,7 +94,7 @@ export async function androidAddon({
 	const permissionStep =
 		'once the download is verified the install-permission screen opens and the button reads "Install" again; allow it and come back, it continues by itself';
 	const steps =
-		addonMode === "install"
+		mode === "install"
 			? [
 					'press "Get started", then "Sign in with Google"',
 					'tap "Install"; the button reads "Downloading…" while the toast shows the progress',
@@ -116,7 +117,7 @@ export async function androidAddon({
 
 	console.log(`
 serving  ${harness.assets.join(", ")} on ${harness.origin} (reversed onto the device)
-app      ${await installedVersion()}   companion  ${await installedVersion(companionPackage)}   mode  ${addonMode}${failingMarker}
+app      ${await installedVersion()}   companion  ${await installedVersion(companionPackage)}   mode  ${mode}${failingMarker}
 
 what to do on the device:
 ${printSteps(steps)}

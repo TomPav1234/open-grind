@@ -52,7 +52,15 @@ export const companionPackage = "org.opengrind.google_oauth";
 export const companionRepo = "open-grind-google-oauth-android-app";
 export const companionStem = "open-grind-google-oauth";
 export const companionRelease = Bun.env.COMPANION_RELEASE ?? "v1.1.0";
-export const addonMode = Bun.env.ADDON === "update" ? "update" : "install";
+const addonModes = ["install", "update"] as const;
+
+export function addonMode(): (typeof addonModes)[number] {
+	const value = Bun.env.ADDON;
+	if (value === undefined) return "install";
+	const mode = addonModes.find((candidate) => candidate === value);
+	if (!mode) throw new Error(`ADDON must be one of ${addonModes.join(", ")}`);
+	return mode;
+}
 
 const companionAbiTokens = new Map([
 	["aarch64", "arm64-v8a"],
