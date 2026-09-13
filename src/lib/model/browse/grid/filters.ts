@@ -22,16 +22,33 @@ export const filterIsOnlineSchema = z.boolean();
 export const filterIsRightNowSchema = z.boolean();
 export const filterIsFreshSchema = z.boolean();
 
+const rangeSchema = ({ min, max }: { min: number; max: number }) =>
+	z
+		.array(
+			z
+				.number()
+				.transform((bound) => Math.min(Math.max(bound, min), max)),
+		)
+		.length(2);
+
+export const isFullRange = ({
+	range: [from, to],
+	min,
+	max,
+}: {
+	range: number[];
+	min: number;
+	max: number;
+}) => from === min && to === max;
+
 export const AGE_MIN = 18;
-export const AGE_MAX = 102;
+export const AGE_MAX = 99;
 
 export const ageRangeLabel = ([from, to]: number[]) =>
 	to === AGE_MAX ? `${from} years & over` : `${from} - ${to}`;
 
 export const filterAgeEnabledSchema = z.boolean();
-export const filterAgeSchema = z
-	.array(z.number().min(AGE_MIN).max(AGE_MAX))
-	.length(2);
+export const filterAgeSchema = rangeSchema({ min: AGE_MIN, max: AGE_MAX });
 
 export const filterGendersEnabledSchema = z.boolean().default(false);
 export const filterGendersSchema = z.array(
@@ -120,20 +137,25 @@ export type FilterBodyTypeId =
 	(typeof FilterBodyType)[keyof typeof FilterBodyType];
 export const filterBodyTypeSchema = z.array(z.enum(FilterBodyType));
 
-export const HEIGHT_CM_MIN = 120;
-export const HEIGHT_CM_MAX = 242;
-export const WEIGHT_KG_MIN = 40;
-export const WEIGHT_KG_MAX = 273;
+export const HEIGHT_CM_MIN = 121;
+export const HEIGHT_CM_MAX = 241;
+export const WEIGHT_GRAMS_MIN = 40823;
+export const WEIGHT_GRAMS_MAX = 272156;
+export const weightGramsToKg = (grams: number) => Math.round(grams / 1000);
+export const WEIGHT_KG_MIN = weightGramsToKg(WEIGHT_GRAMS_MIN);
+export const WEIGHT_KG_MAX = weightGramsToKg(WEIGHT_GRAMS_MAX);
 
 export const filterHeightEnabledSchema = z.boolean();
-export const filterHeightSchema = z
-	.array(z.number().min(HEIGHT_CM_MIN).max(HEIGHT_CM_MAX))
-	.length(2);
+export const filterHeightSchema = rangeSchema({
+	min: HEIGHT_CM_MIN,
+	max: HEIGHT_CM_MAX,
+});
 
 export const filterWeightEnabledSchema = z.boolean();
-export const filterWeightSchema = z
-	.array(z.number().min(WEIGHT_KG_MIN).max(WEIGHT_KG_MAX))
-	.length(2);
+export const filterWeightSchema = rangeSchema({
+	min: WEIGHT_KG_MIN,
+	max: WEIGHT_KG_MAX,
+});
 
 export const filterRelationshipStatusEnabledSchema = z.boolean();
 export const FilterRelationshipStatus = {

@@ -1,10 +1,17 @@
 import type z from "zod";
 
 import {
+	AGE_MAX,
+	AGE_MIN,
 	type GridSearchFilters,
+	HEIGHT_CM_MAX,
+	HEIGHT_CM_MIN,
 	isFilterableGenderId,
 	isFilterableTagKey,
 	isFilterableTribe,
+	isFullRange,
+	WEIGHT_GRAMS_MAX,
+	WEIGHT_GRAMS_MIN,
 	WEIGHT_KG_MAX,
 	WEIGHT_KG_MIN,
 } from "$lib/model/browse/grid/filters";
@@ -12,6 +19,28 @@ import type { cascadeV4QuerySchema } from "$lib/model/browse/grid/cascade/query/
 
 const sendable = <T>({ enabled, values }: { enabled: boolean; values: T[] }) =>
 	enabled && values.length > 0 ? values : undefined;
+
+const sendableRange = ({
+	enabled,
+	range,
+	min,
+	max,
+}: {
+	enabled: boolean;
+	range: number[];
+	min: number;
+	max: number;
+}) => (enabled && !isFullRange({ range, min, max }) ? range : undefined);
+
+const weightGrams = ({
+	kg,
+	end,
+	endGrams,
+}: {
+	kg: number | undefined;
+	end: number;
+	endGrams: number;
+}) => (kg === undefined || kg === end ? endGrams : kg * 1000);
 
 type CascadeQuery = z.infer<typeof cascadeV4QuerySchema>;
 type CascadeFilters = Omit<CascadeQuery, "nearbyGeoHash">;
@@ -35,14 +64,29 @@ export function sentFilterKeys(
 }
 
 function cascadeFilters(filters: GridSearchFilters): CascadeFilters {
+	const age = sendableRange({
+		enabled: filters.ageEnabled,
+		range: filters.age,
+		min: AGE_MIN,
+		max: AGE_MAX,
+	});
+	const height = sendableRange({
+		enabled: filters.heightEnabled,
+		range: filters.height,
+		min: HEIGHT_CM_MIN,
+		max: HEIGHT_CM_MAX,
+	});
+	const weight = sendableRange({
+		enabled: filters.weightEnabled,
+		range: filters.weight,
+		min: WEIGHT_KG_MIN,
+		max: WEIGHT_KG_MAX,
+	});
 	return {
 		favorites: filters.isFavorite || undefined,
 		onlineOnly: filters.isOnline || undefined,
 		rightNow: filters.isRightNow || undefined,
-		...(filters.ageEnabled && {
-			ageMin: filters.age[0],
-			ageMax: filters.age[1],
-		}),
+		...(age && { ageMin: age[0], ageMax: age[1] }),
 		genders: sendable({
 			enabled: filters.genderEnabled,
 			values: filters.genders.filter(isFilterableGenderId),
@@ -69,13 +113,18 @@ function cascadeFilters(filters: GridSearchFilters): CascadeFilters {
 			enabled: filters.bodyTypesEnabled,
 			values: filters.bodyTypes,
 		}),
-		...(filters.heightEnabled && {
-			heightCmMin: filters.height[0],
-			heightCmMax: filters.height[1],
-		}),
-		...(filters.weightEnabled && {
-			weightGramsMin: (filters.weight[0] ?? WEIGHT_KG_MIN) * 1000,
-			weightGramsMax: (filters.weight[1] ?? WEIGHT_KG_MAX) * 1000,
+		...(height && { heightCmMin: height[0], heightCmMax: height[1] }),
+		...(weight && {
+			weightGramsMin: weightGrams({
+				kg: weight[0],
+				end: WEIGHT_KG_MIN,
+				endGrams: WEIGHT_GRAMS_MIN,
+			}),
+			weightGramsMax: weightGrams({
+				kg: weight[1],
+				end: WEIGHT_KG_MAX,
+				endGrams: WEIGHT_GRAMS_MAX,
+			}),
 		}),
 		relationshipStatuses: sendable({
 			enabled: filters.relationshipStatusesEnabled,

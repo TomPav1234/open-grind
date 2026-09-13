@@ -16,8 +16,11 @@ import {
 	HEIGHT_CM_MIN,
 	isFilterableGenderId,
 	isFilterableTribe,
+	WEIGHT_GRAMS_MAX,
+	WEIGHT_GRAMS_MIN,
 	WEIGHT_KG_MAX,
 	WEIGHT_KG_MIN,
+	weightGramsToKg,
 } from "$lib/model/browse/grid/filters";
 import {
 	acceptNSFWPics,
@@ -239,9 +242,9 @@ export const filters: Filter[] = [
 		max: WEIGHT_KG_MAX,
 		minKey: "weightGramsMin",
 		maxKey: "weightGramsMax",
-		rawMin: WEIGHT_KG_MIN * 1000,
-		rawMax: WEIGHT_KG_MAX * 1000,
-		store: (grams) => grams / 1000,
+		rawMin: WEIGHT_GRAMS_MIN,
+		rawMax: WEIGHT_GRAMS_MAX,
+		store: weightGramsToKg,
 		render: (f) =>
 			rangeText({
 				floor: WEIGHT_KG_MIN,

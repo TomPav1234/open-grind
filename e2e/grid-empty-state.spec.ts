@@ -7,7 +7,7 @@ import {
 } from "./support/app";
 
 const PROFILE_LINK = '.photo-grid a[href^="/profile/"]';
-const NO_DEMO_PROFILE_AGE = "age=90-102";
+const NO_DEMO_PROFILE_AGE = "age=90-99";
 
 test.beforeEach(async ({ page }) => {
 	test.setTimeout(180_000);

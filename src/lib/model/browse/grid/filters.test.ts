@@ -26,13 +26,21 @@ describe("grid search filter schemas", () => {
 		);
 	});
 
-	it("enforces filter range boundaries", () => {
-		expect(filterAgeSchema.safeParse([18, 102]).success).toBe(true);
-		expect(filterAgeSchema.safeParse([17, 102]).success).toBe(false);
-		expect(filterHeightSchema.safeParse([120, 242]).success).toBe(true);
-		expect(filterHeightSchema.safeParse([119, 242]).success).toBe(false);
-		expect(filterWeightSchema.safeParse([40, 273]).success).toBe(true);
-		expect(filterWeightSchema.safeParse([40, 274]).success).toBe(false);
+	it("clamps saved ranges into the official app's limits", () => {
+		expect(filterAgeSchema.parse([17, 102])).toEqual([18, 99]);
+		expect(filterHeightSchema.parse([120, 242])).toEqual([121, 241]);
+		expect(filterWeightSchema.parse([40, 273])).toEqual([41, 272]);
+		expect(filterAgeSchema.safeParse([18]).success).toBe(false);
+	});
+
+	it("keeps old saved preferences parsable", () => {
+		expect(
+			gridSearchFiltersSchema.parse({
+				ageEnabled: true,
+				age: [30, 102],
+				weight: [40, 273],
+			}),
+		).toMatchObject({ age: [30, 99], weight: [41, 272] });
 	});
 
 	it("accepts not-specified aliases for filters that expose them", () => {

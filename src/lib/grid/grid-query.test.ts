@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { defaultFilters, GENDER_ASK_ME } from "$lib/model/browse/grid/filters";
+import {
+	AGE_MAX,
+	defaultFilters,
+	GENDER_ASK_ME,
+	WEIGHT_KG_MAX,
+	WEIGHT_KG_MIN,
+} from "$lib/model/browse/grid/filters";
 import { Tribe } from "$lib/model/users/profiles";
 import { buildCascadeQuery, sentFilterKeys } from "./grid-query";
 
@@ -69,6 +75,60 @@ describe("buildCascadeQuery", () => {
 		expect(
 			Object.entries(query).filter(([, value]) => value !== undefined),
 		).toEqual([["nearbyGeoHash", geohash]]);
+	});
+});
+
+describe("buildCascadeQuery ranges", () => {
+	it("leaves out a range left at its full limits", () => {
+		const query = buildCascadeQuery({
+			geohash,
+			filters: {
+				...defaultFilters,
+				ageEnabled: true,
+				heightEnabled: true,
+				weightEnabled: true,
+			},
+		});
+
+		expect(query.ageMin).toBeUndefined();
+		expect(query.heightCmMin).toBeUndefined();
+		expect(query.weightGramsMin).toBeUndefined();
+	});
+
+	it("sends both bounds once one moves, with the official weight ends in grams", () => {
+		const query = buildCascadeQuery({
+			geohash,
+			filters: {
+				...defaultFilters,
+				ageEnabled: true,
+				age: [30, AGE_MAX],
+				weightEnabled: true,
+				weight: [WEIGHT_KG_MIN, 80],
+			},
+		});
+
+		expect(query).toMatchObject({
+			ageMin: 30,
+			ageMax: 99,
+			weightGramsMin: 40823,
+			weightGramsMax: 80000,
+		});
+	});
+
+	it("sends the official weight maximum in grams", () => {
+		const query = buildCascadeQuery({
+			geohash,
+			filters: {
+				...defaultFilters,
+				weightEnabled: true,
+				weight: [60, WEIGHT_KG_MAX],
+			},
+		});
+
+		expect(query).toMatchObject({
+			weightGramsMin: 60000,
+			weightGramsMax: 272156,
+		});
 	});
 });
 
