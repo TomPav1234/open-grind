@@ -23,8 +23,8 @@ object InstallProbe {
 		targetSigner = InstallGate.TargetSigner.of(
 			context.packageManager.checkSignatures(context.packageName, target),
 		),
-		installer = installerOf(context, target),
-		updateOwner = updateOwnerOf(context, target),
+		installer = { installerOf(context, target) },
+		updateOwner = { updateOwnerOf(context, target) },
 		self = context.packageName,
 	)
 
@@ -99,6 +99,8 @@ object InstallProbe {
 		}
 	} catch (e: PackageManager.NameNotFoundException) {
 		null
+	} catch (e: IllegalArgumentException) {
+		null
 	}
 
 	private fun updateOwnerOf(
@@ -111,6 +113,8 @@ object InstallProbe {
 			null
 		}
 	} catch (e: PackageManager.NameNotFoundException) {
+		null
+	} catch (e: IllegalArgumentException) {
 		null
 	}
 

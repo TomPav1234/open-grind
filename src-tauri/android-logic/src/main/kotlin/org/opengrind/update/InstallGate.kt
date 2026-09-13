@@ -48,8 +48,8 @@ object InstallGate {
 		signerSha256: String?,
 		target: String,
 		targetSigner: TargetSigner,
-		installer: String?,
-		updateOwner: String?,
+		installer: () -> String?,
+		updateOwner: () -> String?,
 		self: String,
 	): Verdict {
 		if (signerSha256 == null || !matchesReleaseCert(signerSha256)) {
@@ -58,11 +58,16 @@ object InstallGate {
 		if (target != self && targetSigner == TargetSigner.Foreign) {
 			return Verdict.ForeignTarget
 		}
-		if (updateOwner != null && updateOwner != self) {
-			return Verdict.ExternallyManaged(updateOwner)
+		if (targetSigner == TargetSigner.NotInstalled) {
+			return Verdict.Supported
 		}
-		if (installer != null && installer in EXTERNAL_UPDATERS) {
-			return Verdict.ExternallyManaged(installer)
+		val owningUpdates = updateOwner()
+		if (owningUpdates != null && owningUpdates != self) {
+			return Verdict.ExternallyManaged(owningUpdates)
+		}
+		val installedBy = installer()
+		if (installedBy != null && installedBy in EXTERNAL_UPDATERS) {
+			return Verdict.ExternallyManaged(installedBy)
 		}
 		return Verdict.Supported
 	}

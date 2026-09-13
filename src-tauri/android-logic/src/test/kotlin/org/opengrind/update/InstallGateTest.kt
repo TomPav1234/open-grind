@@ -20,10 +20,14 @@ class InstallGateTest {
 		signerSha256 = signerSha256,
 		target = target,
 		targetSigner = targetSigner,
-		installer = installer,
-		updateOwner = updateOwner,
+		installer = { installer },
+		updateOwner = { updateOwner },
 		self = self,
 	)
+
+	private val ownerProbeOfAnAbsentPackage: () -> String? = {
+		throw IllegalArgumentException("Unknown package")
+	}
 
 	@Test
 	fun `a sideloaded release build may update itself`() {
@@ -141,6 +145,33 @@ class InstallGateTest {
 		assertEquals(
 			InstallGate.Verdict.Supported,
 			decide(target = addon, targetSigner = InstallGate.TargetSigner.NotInstalled),
+		)
+	}
+
+	@Test
+	fun `an add-on that is not installed yet is never probed for its owner`() {
+		assertEquals(
+			InstallGate.Verdict.Supported,
+			InstallGate.decide(
+				signerSha256 = releaseCert,
+				target = addon,
+				targetSigner = InstallGate.TargetSigner.NotInstalled,
+				installer = ownerProbeOfAnAbsentPackage,
+				updateOwner = ownerProbeOfAnAbsentPackage,
+				self = self,
+			),
+		)
+	}
+
+	@Test
+	fun `an installed add-on is still probed for the store that owns it`() {
+		assertEquals(
+			InstallGate.Verdict.ExternallyManaged("com.example.store"),
+			decide(
+				target = addon,
+				targetSigner = InstallGate.TargetSigner.Shared,
+				updateOwner = "com.example.store",
+			),
 		)
 	}
 
