@@ -395,6 +395,15 @@ mod wire_tests {
 				"detail": { "reason": "externallyManaged", "detail": { "installer": "org.fdroid.fdroid" } }
 			})
 		);
+		assert_eq!(
+			json(&Capability::Unsupported(
+				install::Unsupported::ForeignTarget
+			)),
+			serde_json::json!({
+				"state": "unsupported",
+				"detail": { "reason": "foreignTarget" }
+			})
+		);
 
 		assert_eq!(
 			json(&UpdateError::CheckTooSoon {

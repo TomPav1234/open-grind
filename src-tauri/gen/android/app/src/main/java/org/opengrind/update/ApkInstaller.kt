@@ -39,6 +39,7 @@ object ApkInstaller {
 			is InstallGate.Verdict.Supported -> {}
 			is InstallGate.Verdict.ExternallyManaged -> throw InstallRefused("externally-managed")
 			is InstallGate.Verdict.ForeignSigner -> throw InstallRefused("foreign-signer")
+			is InstallGate.Verdict.ForeignTarget -> throw InstallRefused("foreign-target")
 		}
 		if (!InstallProbe.canInstallNow(context)) throw InstallRefused("unknown-sources")
 

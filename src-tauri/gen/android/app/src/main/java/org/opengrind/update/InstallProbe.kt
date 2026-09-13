@@ -19,6 +19,10 @@ object InstallProbe {
 		target: String,
 	): InstallGate.Verdict = InstallGate.decide(
 		signerSha256 = soleSignerOf(installedSigningInfo(context)),
+		target = target,
+		targetSigner = InstallGate.TargetSigner.of(
+			context.packageManager.checkSignatures(context.packageName, target),
+		),
 		installer = installerOf(context, target),
 		updateOwner = updateOwnerOf(context, target),
 		self = context.packageName,

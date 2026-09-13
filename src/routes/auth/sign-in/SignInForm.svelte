@@ -7,8 +7,10 @@
 
 	import { callMethod } from "$lib/api/methods";
 	import {
+		companionDisabled,
 		companionUnavailable,
 		companionUntrusted,
+		disabledCompanionMessage,
 		finishSignIn,
 		reportSignInFailure,
 		untrustedCompanionMessage,
@@ -35,6 +37,8 @@
 			label: "Google",
 			failures: {
 				[companionUnavailable]: () => void goto("/auth/sign-in/google"),
+				[companionDisabled]: () =>
+					toast.error(disabledCompanionMessage),
 				[companionUntrusted]: () => {
 					toast.error(untrustedCompanionMessage);
 					void goto("/auth/sign-in/google?paste");

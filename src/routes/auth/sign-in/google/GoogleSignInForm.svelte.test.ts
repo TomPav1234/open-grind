@@ -271,6 +271,26 @@ describe("GoogleSignInForm", () => {
 		);
 	});
 
+	it("stays on Continue when the companion app is turned off", async () => {
+		api.getInstalledVersion.mockResolvedValue("1.1.0");
+		const { screen, fireEvent } = await opened();
+		callMethodMock.mockRejectedValue({
+			kind: "Auth",
+			message: "companion-disabled",
+		});
+
+		await fireEvent.click(button("Continue"));
+		await settled();
+
+		expect(toastMock.error).toHaveBeenCalledExactlyOnceWith(
+			"The Open Grind Google OAuth app is turned off. Turn it on in Android settings, then try again.",
+		);
+		expect(button("Continue")).toHaveProperty("disabled", false);
+		expect(screen.queryByRole("button", { name: "Install" })).toBeNull();
+		expect(screen.queryByLabelText("Token")).toBeNull();
+		expect(api.checkForUpdate).not.toHaveBeenCalled();
+	});
+
 	it("tries the companion app again once the screen is shown again", async () => {
 		api.getInstalledVersion.mockResolvedValue("1.1.0");
 		const { fireEvent } = await opened();

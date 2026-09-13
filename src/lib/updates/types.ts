@@ -6,6 +6,7 @@ const unsupportedSchema = z.discriminatedUnion("reason", [
 		detail: z.object({ installer: z.string() }),
 	}),
 	z.object({ reason: z.literal("foreignSigner") }),
+	z.object({ reason: z.literal("foreignTarget") }),
 	z.object({ reason: z.literal("undetermined") }),
 	z.object({
 		reason: z.literal("noReleaseArtifacts"),

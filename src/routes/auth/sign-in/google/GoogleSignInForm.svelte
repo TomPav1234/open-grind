@@ -5,8 +5,10 @@
 	import { googleHandbackState } from "$lib/api/google-handback-state.svelte";
 	import { callMethod } from "$lib/api/methods";
 	import {
+		companionDisabled,
 		companionUnavailable,
 		companionUntrusted,
+		disabledCompanionMessage,
 		finishSignIn,
 		reportSignInFailure,
 		untrustedCompanionMessage,
@@ -101,6 +103,10 @@
 						toast.error(
 							"Couldn't find the Open Grind Google OAuth app on your device. Install it first, or paste the OAuth token manually.",
 						);
+						return true;
+					}
+					if (message === companionDisabled) {
+						toast.error(disabledCompanionMessage);
 						return true;
 					}
 					if (message === companionUntrusted) {

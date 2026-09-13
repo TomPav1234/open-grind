@@ -83,6 +83,7 @@ class UpdatePlugin(private val activity: Activity) : Plugin(activity) {
 				}
 
 				is InstallGate.Verdict.ForeignSigner -> put("reason", "foreign-signer")
+				is InstallGate.Verdict.ForeignTarget -> put("reason", "foreign-target")
 				is InstallGate.Verdict.Supported -> {}
 			}
 		}

@@ -10,6 +10,7 @@ const unsupportedCopy: Record<Unsupported["reason"], string> = {
 	externallyManaged:
 		"Updates are managed by the store that installed the app",
 	foreignSigner: "This build was not signed by Open Grind",
+	foreignTarget: "The installed app isn't signed by Open Grind",
 	undetermined: "Open Grind can't tell whether it may update itself",
 	noReleaseArtifacts: "No release is published for this platform",
 	sandboxed: "The sandbox this app runs in manages its own updates",
@@ -19,6 +20,7 @@ const unsupportedCopy: Record<Unsupported["reason"], string> = {
 const userCanFix: Record<Unsupported["reason"], boolean> = {
 	externallyManaged: false,
 	foreignSigner: false,
+	foreignTarget: true,
 	undetermined: true,
 	noReleaseArtifacts: false,
 	sandboxed: false,
@@ -56,6 +58,8 @@ const copy: Record<KnownKind, string> = {
 const addonUnsupportedCopy: Partial<Record<Unsupported["reason"], string>> = {
 	externallyManaged:
 		"The store that installed the companion app manages its updates",
+	foreignTarget:
+		"The installed companion app isn't signed by Open Grind. Uninstall it to install the official one.",
 	noReleaseArtifacts: "The companion app isn't published for this device",
 	undetermined:
 		"Open Grind can't tell whether it may install the companion app",

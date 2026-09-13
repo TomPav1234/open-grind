@@ -153,6 +153,24 @@ describe("SignInForm", () => {
 		expect(toastMock.error).not.toHaveBeenCalled();
 	});
 
+	it("stays on the login screen when the companion app is turned off", async () => {
+		callMethodMock.mockRejectedValue({
+			kind: "Auth",
+			message: "companion-disabled",
+		});
+		render(SignInForm);
+
+		await fireEvent.click(
+			screen.getByRole("button", { name: "Sign in with Google" }),
+		);
+		await settle();
+
+		expect(toastMock.error).toHaveBeenCalledExactlyOnceWith(
+			"The Open Grind Google OAuth app is turned off. Turn it on in Android settings, then try again.",
+		);
+		expect(gotoMock).not.toHaveBeenCalled();
+	});
+
 	it("sends an untrusted companion app straight to the pasted token", async () => {
 		callMethodMock.mockRejectedValue({
 			kind: "Auth",

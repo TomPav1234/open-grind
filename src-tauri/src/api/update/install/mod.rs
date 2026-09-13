@@ -20,10 +20,28 @@ use super::component::Component;
 pub enum Unsupported {
 	ExternallyManaged { installer: String },
 	ForeignSigner,
+	ForeignTarget,
 	Undetermined,
 	NoReleaseArtifacts { target: String },
 	Sandboxed { runtime: String },
 	LocationNotWritable { path: String },
+}
+
+impl Unsupported {
+	#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+	fn from_gate_marker(
+		marker: &str,
+		installer: Option<String>,
+	) -> Option<Self> {
+		match marker {
+			"externally-managed" => Some(Self::ExternallyManaged {
+				installer: installer.unwrap_or_else(|| "another store".into()),
+			}),
+			"foreign-signer" => Some(Self::ForeignSigner),
+			"foreign-target" => Some(Self::ForeignTarget),
+			_ => None,
+		}
+	}
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -118,7 +136,7 @@ pub use platform::{
 
 #[cfg(test)]
 mod pins {
-	use super::suffix_for;
+	use super::{suffix_for, Unsupported};
 
 	const KEYS: &str = include_str!("../../../../../KEYS.md");
 	const LINUX_BUILD: &str = include_str!("../../../../../ci/linux/build.sh");
@@ -138,6 +156,215 @@ mod pins {
 	);
 
 	const ANDROID_BRIDGE: &str = include_str!("android.rs");
+
+	const INSTALLER: &str = include_str!(
+		"../../../../gen/android/app/src/main/java/org/opengrind/update/ApkInstaller.kt"
+	);
+
+	const PROBE: &str = include_str!(
+		"../../../../gen/android/app/src/main/java/org/opengrind/update/InstallProbe.kt"
+	);
+
+	const SIGN_IN_PLUGIN: &str = include_str!(
+		"../../../../gen/android/app/src/main/java/org/opengrind/googleoauth/GoogleOauthPlugin.kt"
+	);
+
+	const TOKEN_HANDOFF: &str = include_str!(
+		"../../../../gen/android/app/src/main/java/org/opengrind/TokenHandoffActivity.kt"
+	);
+
+	const REQUEST_TOKEN_PERMISSION: &str =
+		"org.opengrind.google_oauth.permission.REQUEST_TOKEN";
+	const REQUEST_TOKEN_ACTION: &str =
+		"org.opengrind.google_oauth.action.REQUEST_TOKEN";
+	const RECEIVE_TOKEN_PERMISSION: &str =
+		"org.opengrind.permission.RECEIVE_GOOGLE_TOKEN";
+	const TOKEN_EXTRA: &str = "org.opengrind.google_oauth.extra.TOKEN";
+
+	fn squashed(source: &str) -> String {
+		source.split_whitespace().collect()
+	}
+
+	fn kotlin_constant<'a>(source: &'a str, file: &str, name: &str) -> &'a str {
+		let declaration = format!("const val {name} = \"");
+		let start = source
+			.find(&declaration)
+			.unwrap_or_else(|| panic!("{file} no longer declares {name}"))
+			+ declaration.len();
+		let length = source[start..]
+			.find('"')
+			.unwrap_or_else(|| panic!("{file} {name} is not a string literal"));
+		&source[start..start + length]
+	}
+
+	fn bridge_function(name: &str) -> &'static str {
+		let start = ANDROID_BRIDGE
+			.find(&format!("fn {name}("))
+			.unwrap_or_else(|| panic!("android.rs no longer defines {name}"));
+		let length =
+			ANDROID_BRIDGE[start..].find("\n}\n").unwrap_or_else(|| {
+				panic!("android.rs {name} has no closing brace")
+			});
+		&ANDROID_BRIDGE[start..start + length]
+	}
+
+	fn manifest_element(tag: &str, name: &str) -> &'static str {
+		let opening = format!("<{tag}");
+		let named = format!("android:name=\"{name}\"");
+		MANIFEST
+			.match_indices(&opening)
+			.map(|(at, _)| {
+				let end =
+					MANIFEST[at..].find('>').map_or(MANIFEST.len(), |i| at + i);
+				&MANIFEST[at..end]
+			})
+			.find(|element| element.contains(&named))
+			.unwrap_or_else(|| {
+				panic!("the manifest has no <{tag}> named {name}")
+			})
+	}
+
+	#[test]
+	fn every_gate_refusal_the_kotlin_side_sends_maps_to_its_reason() {
+		for (verdict, marker, expected) in [
+			(
+				"ExternallyManaged",
+				"externally-managed",
+				Unsupported::ExternallyManaged {
+					installer: "another store".into(),
+				},
+			),
+			(
+				"ForeignSigner",
+				"foreign-signer",
+				Unsupported::ForeignSigner,
+			),
+			(
+				"ForeignTarget",
+				"foreign-target",
+				Unsupported::ForeignTarget,
+			),
+		] {
+			assert!(
+				squashed(PLUGIN).contains(&squashed(&format!(
+					"is InstallGate.Verdict.{verdict} -> put(\"reason\", \"{marker}\")"
+				))) || squashed(PLUGIN).contains(&squashed(&format!(
+					"is InstallGate.Verdict.{verdict} -> {{ put(\"reason\", \"{marker}\")"
+				))),
+				"UpdatePlugin.capability no longer reports {verdict} as {marker}"
+			);
+			assert!(
+				squashed(INSTALLER).contains(&squashed(&format!(
+					"is InstallGate.Verdict.{verdict} -> throw InstallRefused(\"{marker}\")"
+				))),
+				"ApkInstaller.install no longer refuses {verdict} as {marker}"
+			);
+			assert_eq!(
+				Unsupported::from_gate_marker(marker, None),
+				Some(expected),
+				"the bridge does not map {marker}"
+			);
+		}
+		assert_eq!(
+			Unsupported::from_gate_marker(
+				"externally-managed",
+				Some("org.fdroid.fdroid".into())
+			),
+			Some(Unsupported::ExternallyManaged {
+				installer: "org.fdroid.fdroid".into()
+			})
+		);
+		assert_eq!(Unsupported::from_gate_marker("downgrade", None), None);
+	}
+
+	#[test]
+	fn the_android_bridge_reads_gate_refusals_through_the_shared_mapping() {
+		assert!(
+			bridge_function("verdict").contains(
+				"Unsupported::from_gate_marker(reason, response.installer)"
+			),
+			"android.rs verdict no longer maps capability reasons through from_gate_marker"
+		);
+		let refusal = bridge_function("map_plugin_error");
+		assert!(
+			refusal.contains("Unsupported::from_gate_marker(marker, None)")
+				&& refusal.contains("return UpdateError::Unsupported(unsupported);"),
+			"android.rs map_plugin_error no longer maps install refusals through from_gate_marker"
+		);
+		assert!(
+			bridge_function("install").contains(".map_err(map_plugin_error)"),
+			"android.rs install no longer maps plugin errors"
+		);
+	}
+
+	#[test]
+	fn the_install_probe_judges_the_target_by_one_signature_check() {
+		assert!(
+			squashed(PROBE).contains(&squashed(
+				"targetSigner = InstallGate.TargetSigner.of(context.packageManager.checkSignatures(context.packageName, target)"
+			)),
+			"InstallProbe.verdictFor no longer maps a single checkSignatures result through TargetSigner.of"
+		);
+	}
+
+	#[test]
+	fn the_sign_in_handoff_matches_the_companion_contract() {
+		use super::super::component;
+
+		let companion = component::GOOGLE_OAUTH.install_target();
+		assert!(
+			MANIFEST.contains(&format!(
+				"<uses-permission android:name=\"{REQUEST_TOKEN_PERMISSION}\" />"
+			)),
+			"the manifest no longer asks for {REQUEST_TOKEN_PERMISSION}, so the companion refuses the token request"
+		);
+		assert!(
+			REQUEST_TOKEN_PERMISSION.starts_with(&format!("{companion}.")),
+			"the component table package {companion} no longer owns {REQUEST_TOKEN_PERMISSION}"
+		);
+
+		assert!(
+			manifest_element("permission", RECEIVE_TOKEN_PERMISSION)
+				.contains("android:protectionLevel=\"signature\""),
+			"{RECEIVE_TOKEN_PERMISSION} is no longer a signature permission, so any app could hand over a token"
+		);
+		assert!(
+			manifest_element("activity", ".TokenHandoffActivity").contains(
+				&format!("android:permission=\"{RECEIVE_TOKEN_PERMISSION}\"")
+			),
+			"TokenHandoffActivity is no longer guarded by {RECEIVE_TOKEN_PERMISSION}"
+		);
+
+		assert!(
+			MANIFEST
+				.contains(&format!("<package android:name=\"{companion}\" />")),
+			"the manifest <queries> no longer names the companion {companion}"
+		);
+		for (file, source) in [
+			("GoogleOauthPlugin.kt", SIGN_IN_PLUGIN),
+			("TokenHandoffActivity.kt", TOKEN_HANDOFF),
+		] {
+			assert_eq!(
+				kotlin_constant(source, file, "COMPANION_PACKAGE"),
+				companion,
+				"{file} COMPANION_PACKAGE drifted from the component table"
+			);
+			assert_eq!(
+				kotlin_constant(source, file, "EXTRA_TOKEN"),
+				TOKEN_EXTRA,
+				"{file} EXTRA_TOKEN drifted from the companion's published extra"
+			);
+		}
+		assert_eq!(
+			kotlin_constant(
+				SIGN_IN_PLUGIN,
+				"GoogleOauthPlugin.kt",
+				"REQUEST_TOKEN_ACTION"
+			),
+			REQUEST_TOKEN_ACTION,
+			"GoogleOauthPlugin.kt REQUEST_TOKEN_ACTION drifted from the companion's published action"
+		);
+	}
 
 	#[test]
 	fn every_literal_plugin_command_the_bridge_invokes_exists_in_kotlin() {

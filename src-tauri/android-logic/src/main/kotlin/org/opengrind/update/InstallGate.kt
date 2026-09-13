@@ -22,16 +22,41 @@ object InstallGate {
 		data class ExternallyManaged(val installer: String) : Verdict
 
 		data object ForeignSigner : Verdict
+
+		data object ForeignTarget : Verdict
+	}
+
+	const val SIGNATURE_MATCH = 0
+	const val SIGNATURE_UNKNOWN_PACKAGE = -4
+
+	enum class TargetSigner {
+		NotInstalled,
+		Shared,
+		Foreign,
+		;
+
+		companion object {
+			fun of(signatureCheck: Int): TargetSigner = when (signatureCheck) {
+				SIGNATURE_MATCH -> Shared
+				SIGNATURE_UNKNOWN_PACKAGE -> NotInstalled
+				else -> Foreign
+			}
+		}
 	}
 
 	fun decide(
 		signerSha256: String?,
+		target: String,
+		targetSigner: TargetSigner,
 		installer: String?,
 		updateOwner: String?,
 		self: String,
 	): Verdict {
 		if (signerSha256 == null || !matchesReleaseCert(signerSha256)) {
 			return Verdict.ForeignSigner
+		}
+		if (target != self && targetSigner == TargetSigner.Foreign) {
+			return Verdict.ForeignTarget
 		}
 		if (updateOwner != null && updateOwner != self) {
 			return Verdict.ExternallyManaged(updateOwner)

@@ -92,15 +92,13 @@ pub fn verdict(
 	if response.supported {
 		return Ok(response.can_install_now);
 	}
-	Err(match response.reason.as_deref() {
-		Some("externally-managed") => Unsupported::ExternallyManaged {
-			installer: response
-				.installer
-				.unwrap_or_else(|| "another store".into()),
-		},
-		Some("foreign-signer") => Unsupported::ForeignSigner,
-		_ => Unsupported::Undetermined,
-	})
+	Err(response
+		.reason
+		.as_deref()
+		.and_then(|reason| {
+			Unsupported::from_gate_marker(reason, response.installer)
+		})
+		.unwrap_or(Unsupported::Undetermined))
 }
 
 pub async fn install(
@@ -226,16 +224,15 @@ fn map_plugin_error(error: PluginInvokeError) -> UpdateError {
 	let PluginInvokeError::InvokeRejected(response) = &error else {
 		return UpdateError::Install(error.to_string());
 	};
+	if let Some(unsupported) = response
+		.message
+		.as_deref()
+		.and_then(|marker| Unsupported::from_gate_marker(marker, None))
+	{
+		return UpdateError::Unsupported(unsupported);
+	}
 	match response.message.as_deref() {
 		Some("unknown-sources") => UpdateError::NeedsUnknownSources,
-		Some("externally-managed") => {
-			UpdateError::Unsupported(Unsupported::ExternallyManaged {
-				installer: "another store".into(),
-			})
-		}
-		Some("foreign-signer") => {
-			UpdateError::Unsupported(Unsupported::ForeignSigner)
-		}
 		Some("package-mismatch") => UpdateError::Signature(
 			"staged package is for a different application".into(),
 		),
