@@ -218,6 +218,8 @@ export OPEN_GRIND_UPDATE_KEY=<printed key>
 
 Both variables are read only under `debug_assertions` ([dev.rs](./src-tauri/src/api/update/dev.rs)). Run `adb reverse tcp:8787 tcp:8787` to tunnel to an Android device. On Android the debug build instead reads the same two assignments from `/data/local/tmp/open-grind-update.env` on the device — `e2e/updater/run.ts android` pushes it automatically, or `adb push` it when testing by hand. `cargo test --lib -- --ignored live_` runs the end-to-end check, download and signature tests against it.
 
+The dev server also serves a companion app release when given `COMPANION_PAYLOAD=<apk>` (tag `COMPANION_TAG`, default `v99.0.0`; `COMPANION_ABI` one of `arm64-v8a`, `v7a`, `x86_64`, default `arm64-v8a`); without `PAYLOAD`, `APP_BUNDLE`, `ARTIFACT` or `SUFFIX` it serves only the companion. `e2e/updater/run.ts android-addon` drives the guided companion runs on a device: `ADDON=install` (default) uninstalls the companion and serves the published `COMPANION_RELEASE` (or a local `COMPANION_APK`), verified against the release key; `ADDON=update` installs it first and re-serves it under the next patch tag, or `COMPANION_TAG`. The companion ABI follows `ABI`.
+
 `bun ci` also installs a pre-commit hook ([lefthook](https://lefthook.dev/), configured in [lefthook.yml](./lefthook.yml)) that runs over staged files only:
 
 - `*.{js,mjs,ts,svelte}` — Prettier, then ESLint with `--fix`
