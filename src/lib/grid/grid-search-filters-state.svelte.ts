@@ -34,8 +34,7 @@ export class GridSearchFiltersState {
 	}
 
 	resetFilters() {
-		this.value = { ...defaultFilters };
-		void this.#save();
+		this.set(defaultFilters);
 	}
 
 	reset() {

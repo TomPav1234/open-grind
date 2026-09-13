@@ -72,3 +72,15 @@ describe("set", () => {
 		expect(onQueryChange).toHaveBeenCalledOnce();
 	});
 });
+
+describe("resetFilters", () => {
+	it("saves the defaults and queries again", async () => {
+		const { state, onQueryChange } = await loadedState();
+
+		state.resetFilters();
+
+		expect(state.value).toEqual(defaultFilters);
+		expect(setPreferencesMock).toHaveBeenCalledOnce();
+		expect(onQueryChange).toHaveBeenCalledOnce();
+	});
+});

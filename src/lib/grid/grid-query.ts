@@ -8,17 +8,30 @@ import {
 } from "$lib/model/browse/grid/filters";
 import type { cascadeV4QuerySchema } from "$lib/model/browse/grid/cascade/query/v4";
 
+type CascadeQuery = z.infer<typeof cascadeV4QuerySchema>;
+type CascadeFilters = Omit<CascadeQuery, "nearbyGeoHash">;
+
 export function buildCascadeQuery({
 	geohash,
 	filters,
 }: {
 	geohash: string;
 	filters: GridSearchFilters | null;
-}): z.infer<typeof cascadeV4QuerySchema> {
-	if (!filters) return { nearbyGeoHash: geohash };
+}): CascadeQuery {
+	return { nearbyGeoHash: geohash, ...(filters && cascadeFilters(filters)) };
+}
+
+export function sentFilterKeys(
+	filters: GridSearchFilters,
+): (keyof CascadeFilters)[] {
+	return Object.entries(cascadeFilters(filters))
+		.filter(([, value]) => value !== undefined)
+		.map(([key]) => key as keyof CascadeFilters);
+}
+
+function cascadeFilters(filters: GridSearchFilters): CascadeFilters {
 	const tribes = filters.tribes.filter(isFilterableTribe);
 	return {
-		nearbyGeoHash: geohash,
 		favorites: filters.isFavorite || undefined,
 		onlineOnly: filters.isOnline || undefined,
 		rightNow: filters.isRightNow || undefined,
