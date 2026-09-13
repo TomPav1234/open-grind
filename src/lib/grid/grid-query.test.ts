@@ -20,6 +20,19 @@ describe("buildCascadeQuery", () => {
 		expect(query.genders).toEqual([1]);
 	});
 
+	it("never sends tags that moved to genders", () => {
+		const query = buildCascadeQuery({
+			geohash,
+			filters: {
+				...defaultFilters,
+				tagsEnabled: true,
+				tags: ["ftm", "coffee", "mtf"],
+			},
+		});
+
+		expect(query.tags).toEqual(["coffee"]);
+	});
+
 	it("never sends the Trans tribe, which moved to genders", () => {
 		const query = buildCascadeQuery({
 			geohash,

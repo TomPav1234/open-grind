@@ -9,6 +9,7 @@ import { updateLocation } from "$lib/api/browse/location";
 import { showErrorToast } from "$lib/api/error-toast";
 import { callMethod } from "$lib/api/methods";
 import { preferencesSnapshot } from "$lib/app-data/preferences.svelte";
+import { withDeadline } from "$lib/util/deadline";
 import { ws } from "$lib/ws.svelte";
 import { randomHondurasGeohash } from "./honduras";
 
@@ -26,29 +27,6 @@ export const entitlementBypassState = $state<{
 let blocked: BlockedAction[] = [];
 let granting: Promise<void> | null = null;
 let active: Promise<void> | null = null;
-
-async function withDeadline<T>({
-	work,
-	ms,
-}: {
-	work: () => Promise<T>;
-	ms: number;
-}): Promise<T> {
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	try {
-		return await Promise.race([
-			work(),
-			new Promise<never>((_, reject) => {
-				timer = setTimeout(
-					() => reject(new Error(`no answer after ${ms} ms`)),
-					ms,
-				);
-			}),
-		]);
-	} finally {
-		clearTimeout(timer);
-	}
-}
 
 function syncPromptToQueue(): void {
 	const oldest = blocked[0];

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
 	getGridMock,
+	getTagsMock,
 	patchCachedProfileMock,
 	reconcileHandlers,
 	showErrorToastMock,
@@ -10,6 +11,7 @@ const {
 	storedPreferences,
 } = vi.hoisted(() => ({
 	getGridMock: vi.fn(),
+	getTagsMock: vi.fn(),
 	patchCachedProfileMock: vi.fn(),
 	reconcileHandlers: [] as (() => unknown)[],
 	resolveGeohashMock: vi.fn(),
@@ -25,6 +27,7 @@ vi.mock("./grid", () => ({
 	resolveLazyProfile: vi.fn(),
 	setCachedProfile: vi.fn(),
 }));
+vi.mock("$lib/api/users/tags", () => ({ getTags: getTagsMock }));
 vi.mock("$lib/util/reconcile", () => ({
 	reconciler: {
 		subscribe: (handler: () => unknown) => {
@@ -50,6 +53,7 @@ import {
 	markProfileViewable,
 } from "$lib/api/users/profile-viewability";
 import { mergeProfileEditIntoCaches } from "$lib/api/users/profiles";
+import { defaultFilters } from "$lib/model/browse/grid/filters";
 import type { GridProfile } from "./grid";
 import { gridState } from "./grid-state.svelte";
 
@@ -80,6 +84,35 @@ beforeEach(async () => {
 	await settle();
 	getGridMock.mockReset();
 	getGridMock.mockResolvedValue(page([2]));
+});
+
+describe("grid tag keys", () => {
+	it("sends tag keys for tag texts saved by an older version", async () => {
+		getTagsMock.mockResolvedValue([
+			{
+				language: "en",
+				categoryCollection: [
+					{
+						text: "Fitness",
+						possessiveText: null,
+						tags: [{ tagId: 1, key: "gym", text: "Working Out" }],
+					},
+				],
+			},
+		]);
+		gridState.filters.value = {
+			...defaultFilters,
+			tagsEnabled: true,
+			tags: ["Working Out"],
+		};
+
+		gridState.retry();
+		await settle();
+
+		expect(getGridMock).toHaveBeenCalledWith(
+			expect.objectContaining({ tags: ["gym"] }),
+		);
+	});
 });
 
 describe("grid reconciliation", () => {

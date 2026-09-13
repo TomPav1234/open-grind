@@ -10,6 +10,11 @@ import {
 	SexualPosition,
 	Tribe,
 } from "$lib/model/users/profiles";
+import {
+	type ProfileTagsResponse,
+	tagsOf,
+	tagTextByKey,
+} from "$lib/model/users/tags";
 import type { Gender } from "$lib/model/users/genders";
 
 export const filterIsFavoriteSchema = z.boolean();
@@ -50,6 +55,46 @@ const TAG_KEYS_MOVED_TO_GENDERS = ["ftm", "mtf"];
 
 export const isFilterableTagKey = (key: string) =>
 	!TAG_KEYS_MOVED_TO_GENDERS.includes(key);
+
+export function tagCatalog(languages: ProfileTagsResponse) {
+	const textByKey = tagTextByKey(languages);
+	const textsByKey = new Map<string, string[]>();
+	const keyByText = new Map<string, string>();
+	for (const { key, text } of tagsOf(languages)) {
+		const textLower = text.toLowerCase();
+		if (!keyByText.has(textLower)) keyByText.set(textLower, key);
+		textsByKey.set(key, [...(textsByKey.get(key) ?? []), textLower]);
+	}
+	return {
+		categories: (languages[0]?.categoryCollection ?? []).map(
+			(category) => ({
+				...category,
+				tags: category.tags.filter(({ key }) =>
+					isFilterableTagKey(key),
+				),
+			}),
+		),
+		flat: [...textByKey]
+			.filter(([key]) => isFilterableTagKey(key))
+			.map(([key, text]) => ({
+				key,
+				text,
+				textsLower: textsByKey.get(key) ?? [],
+			}))
+			.sort((a, b) => a.text.localeCompare(b.text)),
+		textOf: (key: string) => textByKey.get(key),
+		keysOf: (values: string[]) => [
+			...new Set(
+				values.map(
+					(value) =>
+						(textByKey.has(value)
+							? value
+							: keyByText.get(value.toLowerCase())) ?? value,
+				),
+			),
+		],
+	};
+}
 
 export const filterPositionEnabledSchema = z.boolean();
 export const FilterPosition = { ...SexualPosition, NotSpecified: -1 } as const;

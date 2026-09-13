@@ -3,6 +3,7 @@ import type z from "zod";
 import {
 	type GridSearchFilters,
 	isFilterableGenderId,
+	isFilterableTagKey,
 	isFilterableTribe,
 	WEIGHT_KG_MAX,
 	WEIGHT_KG_MIN,
@@ -97,7 +98,10 @@ function cascadeFilters(filters: GridSearchFilters): CascadeFilters {
 			enabled: filters.healthPracticesEnabled,
 			values: filters.healthPractices,
 		}),
-		tags: sendable({ enabled: filters.tagsEnabled, values: filters.tags }),
+		tags: sendable({
+			enabled: filters.tagsEnabled,
+			values: filters.tags.filter(isFilterableTagKey),
+		}),
 		fresh: filters.isFresh || undefined,
 	};
 }

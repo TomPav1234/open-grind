@@ -1,4 +1,5 @@
 import { showErrorToast } from "$lib/api/error-toast";
+import { getTags } from "$lib/api/users/tags";
 import {
 	getPreferences,
 	setPreferences,
@@ -6,8 +7,12 @@ import {
 import {
 	defaultFilters,
 	type GridSearchFilters,
+	tagCatalog,
 } from "$lib/model/browse/grid/filters";
+import { withDeadline } from "$lib/util/deadline";
 import { deepEqual } from "$lib/util/deep-equal";
+
+const TAG_LOOKUP_DEADLINE_MS = 5_000;
 
 export class GridSearchFiltersState {
 	value: GridSearchFilters | null = $state(null);
@@ -39,6 +44,28 @@ export class GridSearchFiltersState {
 
 	reset() {
 		this.value = { ...defaultFilters };
+	}
+
+	async resolveTagKeys(): Promise<void> {
+		try {
+			await this.#replaceTagTexts();
+		} catch (error) {
+			console.error(error);
+		}
+	}
+
+	async #replaceTagTexts() {
+		if (!this.value?.tagsEnabled || this.value.tags.length === 0) return;
+		const tags = [...this.value.tags];
+		const languages = await withDeadline({
+			work: getTags,
+			ms: TAG_LOOKUP_DEADLINE_MS,
+		});
+		const keys = tagCatalog(languages).keysOf(tags);
+		if (!this.value || !deepEqual(this.value.tags, tags)) return;
+		if (deepEqual(keys, tags)) return;
+		this.value = { ...this.value, tags: keys };
+		void this.#save();
 	}
 
 	async #load() {

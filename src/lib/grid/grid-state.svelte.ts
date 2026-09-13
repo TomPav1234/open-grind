@@ -214,14 +214,16 @@ class GridState {
 		try {
 			await this.filters.ready;
 			if (token !== this.#fetchToken) return;
-			const geohash =
+			const [geohash] = await Promise.all([
 				(opts?.sampleLocation ?? true)
-					? await this.#withLiveLocation(
+					? this.#withLiveLocation(
 							requestedGeohash,
 							token,
 							opts?.background ?? false,
 						)
-					: requestedGeohash;
+					: requestedGeohash,
+				this.filters.resolveTagKeys(),
+			]);
 			if (token !== this.#fetchToken) return;
 			const query = buildCascadeQuery({
 				geohash,
