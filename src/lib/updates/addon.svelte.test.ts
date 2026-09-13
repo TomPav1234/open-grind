@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { Capability } from "./types";
 import {
 	offer,
 	outcomeOf,
@@ -14,15 +15,30 @@ import {
 const fake = updateApiFake();
 const toasts = toastsFake();
 const platform = vi.hoisted(() => ({ isAndroidPlatform: vi.fn(() => true) }));
+const getUpdateCapability = vi.hoisted(() =>
+	vi.fn<() => Promise<Capability>>(),
+);
 const { api, readiness, emitProgress, emitOutcome } = fake;
 
 vi.mock("./index", async () => ({
 	...(await import("./types")),
 	...(await import("./components")),
 	...fake.api,
+	getUpdateCapability,
 }));
 vi.mock("./toasts", () => toasts);
 vi.mock("$lib/platform/os", () => platform);
+
+const releaseSigned: Capability = {
+	state: "supported",
+	detail: { payloadSuffix: "-android.apk", canInstallNow: true },
+};
+
+async function probedCapability(capability: Capability) {
+	getUpdateCapability.mockResolvedValue(capability);
+	const { hydrateUpdateCapability } = await import("./capability.svelte");
+	await hydrateUpdateCapability();
+}
 
 function lastShownToast() {
 	const shown = toasts.showStage.mock.lastCall?.[0];
@@ -105,5 +121,62 @@ describe("the add-on activity the sign-in screen observes", () => {
 		expect(toasts.showUpToDate).toHaveBeenCalledExactlyOnceWith(
 			"The companion app is up to date",
 		);
+	});
+});
+
+describe("where the companion app can be installed from here", () => {
+	beforeEach(() => {
+		vi.resetModules();
+		vi.clearAllMocks();
+		fake.reset();
+		platform.isAndroidPlatform.mockReturnValue(true);
+	});
+
+	it("is on Android builds signed by Open Grind", async () => {
+		await probedCapability(releaseSigned);
+		const { addonInstallerAvailable } = await import("./addon.svelte");
+
+		expect(addonInstallerAvailable()).toBe(true);
+	});
+
+	it("includes store builds signed by Open Grind", async () => {
+		await probedCapability({
+			state: "unsupported",
+			detail: {
+				reason: "externallyManaged",
+				detail: { installer: "org.fdroid.fdroid" },
+			},
+		});
+		const { addonInstallerAvailable } = await import("./addon.svelte");
+
+		expect(addonInstallerAvailable()).toBe(true);
+	});
+
+	it("is not on a build someone else signed, which the companion app refuses", async () => {
+		await probedCapability({
+			state: "unsupported",
+			detail: { reason: "foreignSigner" },
+		});
+		const { addonInstallerAvailable, startAddonUpdateWatch } =
+			await import("./addon.svelte");
+
+		expect(addonInstallerAvailable()).toBe(false);
+		await startAddonUpdateWatch();
+		expect(api.getUpdateProgress).not.toHaveBeenCalled();
+		expect(api.checkForUpdate).not.toHaveBeenCalled();
+	});
+
+	it("waits for the capability probe before offering anything", async () => {
+		const { addonInstallerAvailable } = await import("./addon.svelte");
+
+		expect(addonInstallerAvailable()).toBe(false);
+	});
+
+	it("is not off Android", async () => {
+		platform.isAndroidPlatform.mockReturnValue(false);
+		await probedCapability(releaseSigned);
+		const { addonInstallerAvailable } = await import("./addon.svelte");
+
+		expect(addonInstallerAvailable()).toBe(false);
 	});
 });

@@ -1,4 +1,5 @@
 import { isAndroidPlatform } from "$lib/platform/os";
+import { buildSignedByOpenGrind } from "./capability.svelte";
 import { GOOGLE_OAUTH_COMPONENT } from "./components";
 import { type StagePresenter, UpdateFlow } from "./flow";
 import { updatesAvailableHere } from "./index";
@@ -6,7 +7,11 @@ import type { UpdateStage } from "./stage";
 import { toastPresenter } from "./toast-presenter";
 
 export function addonInstallerAvailable(): boolean {
-	return updatesAvailableHere() && isAndroidPlatform();
+	return (
+		updatesAvailableHere() &&
+		isAndroidPlatform() &&
+		buildSignedByOpenGrind()
+	);
 }
 
 const activity = $state<{ stage: UpdateStage | null; installs: number }>({
