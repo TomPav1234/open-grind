@@ -63,7 +63,7 @@ pub enum Trigger {
 	Automatic,
 }
 
-pub fn now_secs() -> u64 {
+fn now_secs() -> u64 {
 	SystemTime::now()
 		.duration_since(UNIX_EPOCH)
 		.map(|d| d.as_secs())
@@ -206,7 +206,7 @@ fn set_auto_check_at(
 	Ok(ledger)
 }
 
-pub fn admit(
+fn admit(
 	ledger: &Ledger,
 	component: &Component,
 	trigger: Trigger,
@@ -233,7 +233,33 @@ pub fn admit(
 	Ok(())
 }
 
-pub fn worth_checking(
+#[must_use]
+pub struct Admission {
+	component: &'static Component,
+	trigger: Trigger,
+}
+
+pub fn admit_check(
+	app: &AppHandle,
+	component: &'static Component,
+	trigger: Trigger,
+) -> Result<Admission, UpdateError> {
+	admit_check_in(|| path(app), component, trigger, now_secs())
+}
+
+fn admit_check_in(
+	ledger: impl FnOnce() -> Result<PathBuf, UpdateError>,
+	component: &'static Component,
+	trigger: Trigger,
+	now: u64,
+) -> Result<Admission, UpdateError> {
+	if trigger != Trigger::Manual {
+		admit(&load_from(&ledger()?)?, component, trigger, now)?;
+	}
+	Ok(Admission { component, trigger })
+}
+
+fn worth_checking(
 	component: &Component,
 	baseline: &Baseline,
 	trigger: Trigger,
@@ -243,11 +269,31 @@ pub fn worth_checking(
 	user_asked || installed
 }
 
-pub fn record_check(
-	app: &AppHandle,
-	component: &Component,
-) -> Result<(), UpdateError> {
-	record_check_at(&path(app)?, component)
+impl Admission {
+	pub fn worth_checking(&self, baseline: &Baseline) -> bool {
+		worth_checking(self.component, baseline, self.trigger)
+	}
+
+	pub fn record(self, app: &AppHandle) -> Result<(), UpdateError> {
+		self.record_in(|| path(app))
+	}
+
+	fn record_in(
+		self,
+		ledger: impl FnOnce() -> Result<PathBuf, UpdateError>,
+	) -> Result<(), UpdateError> {
+		let Self { component, trigger } = self;
+		match ledger().and_then(|path| record_check_at(&path, component)) {
+			Err(error) if trigger == Trigger::Manual => {
+				tracing::warn!(
+					"[update] {} check not recorded: {error}",
+					component.key
+				);
+				Ok(())
+			}
+			recorded => recorded,
+		}
+	}
 }
 
 fn record_check_at(
@@ -370,6 +416,107 @@ mod tests {
 	}
 
 	#[test]
+	fn a_manual_check_goes_ahead_when_the_ledger_is_unreadable() {
+		let path = ledger_file("manual-unreadable");
+		fs::create_dir_all(&path).unwrap();
+
+		let admission = admit_check_in(
+			|| Ok(path.clone()),
+			&component::GOOGLE_OAUTH,
+			Trigger::Manual,
+			10_000,
+		)
+		.unwrap();
+		assert!(
+			admission.record_in(|| Ok(path.clone())).is_ok(),
+			"a check the user asked for must still show its result"
+		);
+		let admission = admit_check_in(
+			|| Err(UpdateError::Storage("no data directory".into())),
+			&component::APP,
+			Trigger::Manual,
+			10_000,
+		)
+		.unwrap();
+		assert!(admission
+			.record_in(|| Err(UpdateError::Storage("no data directory".into())))
+			.is_ok());
+		assert!(path.is_dir());
+		let _ = fs::remove_dir_all(path.parent().unwrap());
+	}
+
+	#[test]
+	fn an_unattended_check_is_refused_when_the_ledger_is_unreadable() {
+		let path = ledger_file("unattended-unreadable");
+		fs::create_dir_all(&path).unwrap();
+
+		for trigger in [Trigger::Launch, Trigger::Automatic] {
+			assert!(
+				matches!(
+					admit_check_in(
+						|| Ok(path.clone()),
+						&component::APP,
+						trigger,
+						10_000
+					),
+					Err(UpdateError::Storage(_))
+				),
+				"a {trigger:?} check must not reach the network without a due date"
+			);
+		}
+		assert!(path.is_dir());
+		let _ = fs::remove_dir_all(path.parent().unwrap());
+	}
+
+	#[test]
+	fn an_admitted_unattended_check_that_cannot_record_is_reported() {
+		let readable = ledger_file("unattended-admitted");
+		save(&readable, &ledger(true, 0)).unwrap();
+		let unreadable = ledger_file("unattended-unrecordable");
+		fs::create_dir_all(&unreadable).unwrap();
+
+		for trigger in [Trigger::Launch, Trigger::Automatic] {
+			let admission = admit_check_in(
+				|| Ok(readable.clone()),
+				&component::APP,
+				trigger,
+				10_000,
+			)
+			.unwrap();
+			assert!(
+				matches!(
+					admission.record_in(|| Ok(unreadable.clone())),
+					Err(UpdateError::Storage(_))
+				),
+				"a {trigger:?} check that cannot move its due date would \
+				 reach the network on every tick"
+			);
+		}
+		assert!(unreadable.is_dir());
+		let _ = fs::remove_dir_all(readable.parent().unwrap());
+		let _ = fs::remove_dir_all(unreadable.parent().unwrap());
+	}
+
+	#[test]
+	fn a_manual_check_still_moves_the_due_date_when_it_can() {
+		let path = ledger_file("manual-records");
+		save(&path, &ledger(true, 1)).unwrap();
+
+		admit_check_in(
+			|| Ok(path.clone()),
+			&component::APP,
+			Trigger::Manual,
+			10_000,
+		)
+		.unwrap()
+		.record_in(|| Ok(path.clone()))
+		.unwrap();
+
+		assert!(load_from(&path).unwrap().due_at(&component::APP) > Some(1));
+		let _ = fs::remove_dir_all(path.parent().unwrap());
+	}
+
+	#[test]
 	fn simultaneous_checks_keep_both_due_dates_and_both_writes() {
 		let path = ledger_file("simultaneous");
 		for _ in 0..64 {
@@ -435,6 +582,29 @@ mod tests {
 			&Baseline::of_version(semver::Version::new(1, 1, 0)),
 			Trigger::Automatic
 		));
+	}
+
+	#[test]
+	fn an_admission_judges_worth_by_the_trigger_it_was_admitted_for() {
+		let path = ledger_file("admission-worth");
+		let mut due = ledger(true, 0);
+		due.components
+			.insert(component::GOOGLE_OAUTH.key.to_owned(), 0);
+		save(&path, &due).unwrap();
+		let admitted = |trigger| {
+			admit_check_in(
+				|| Ok(path.clone()),
+				&component::GOOGLE_OAUTH,
+				trigger,
+				10_000,
+			)
+			.unwrap()
+		};
+
+		assert!(!admitted(Trigger::Automatic).worth_checking(&Baseline::Absent));
+		assert!(!admitted(Trigger::Launch).worth_checking(&Baseline::Absent));
+		assert!(admitted(Trigger::Manual).worth_checking(&Baseline::Absent));
+		let _ = fs::remove_dir_all(path.parent().unwrap());
 	}
 
 	#[test]

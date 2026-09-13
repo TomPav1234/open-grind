@@ -84,11 +84,10 @@ pub async fn update_check(
 	trigger: Trigger,
 ) -> Result<CheckResult, UpdateError> {
 	let component = component::by_key(&component)?;
-	let ledger = schedule::load(&app)?;
-	schedule::admit(&ledger, component, trigger, schedule::now_secs())?;
+	let admission = schedule::admit_check(&app, component, trigger)?;
 	let session = Session::open(&app, component)?;
-	if !schedule::worth_checking(component, &session.baseline, trigger) {
-		schedule::record_check(&app, component)?;
+	if !admission.worth_checking(&session.baseline) {
+		admission.record(&app)?;
 		app.state::<UpdateState>().withdraw_updates(component.key);
 		return Ok(CheckResult {
 			available: false,
@@ -98,7 +97,7 @@ pub async fn update_check(
 	}
 
 	let index = release::fetch_index(component, session.channel).await?;
-	schedule::record_check(&app, component)?;
+	admission.record(&app)?;
 
 	let candidate = session.newest_upgrade(&index)?;
 	let state = app.state::<UpdateState>();
@@ -457,12 +456,18 @@ mod wire_tests {
 			download::Phase::Downloading,
 		);
 		assert_eq!(json(&progress)["component"], "google-oauth");
+		assert_eq!(
+			json(&progress)["kind"],
+			"install",
+			"a download resumed after a reload must still know it is a first install"
+		);
 	}
 
 	#[test]
 	fn progress_reports_its_phase_as_flat_fields() {
 		let progress = Progress {
 			component: "google-oauth".into(),
+			kind: InstallKind::Update,
 			tag: "v0.2.0".into(),
 			version: "0.2.0".into(),
 			phase: download::Phase::Downloading,
@@ -473,6 +478,7 @@ mod wire_tests {
 			json(&progress),
 			serde_json::json!({
 				"component": "google-oauth",
+				"kind": "update",
 				"tag": "v0.2.0",
 				"version": "0.2.0",
 				"phase": "downloading",
