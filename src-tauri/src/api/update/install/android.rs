@@ -5,8 +5,10 @@ use tauri::plugin::mobile::PluginInvokeError;
 use tauri::plugin::PluginHandle;
 use tauri::{AppHandle, Manager, Wry};
 
+use super::super::baseline::Baseline;
+use super::super::component::Component;
 use super::super::error::UpdateError;
-use super::{Capability, Outcome, Unsupported};
+use super::{Outcome, Unsupported};
 
 pub struct AndroidUpdater {
 	pub handle: PluginHandle<Wry>,
@@ -24,8 +26,28 @@ struct CapabilityResponse {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct CapabilityRequest<'a> {
+	package_name: Option<&'a str>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct InstallRequest<'a> {
 	path: &'a str,
+	package_name: &'a str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PackageStateRequest<'a> {
+	package_name: &'a str,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PackageStateResponse {
+	installed: bool,
+	version_name: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -40,6 +62,11 @@ struct OutcomeResponse {
 	outcome: Option<Outcome>,
 }
 
+#[derive(Deserialize)]
+struct InstallPendingResponse {
+	pending: bool,
+}
+
 fn plugin(app: &AppHandle) -> Result<PluginHandle<Wry>, UpdateError> {
 	app.try_state::<AndroidUpdater>()
 		.map(|state| state.handle.clone())
@@ -48,24 +75,24 @@ fn plugin(app: &AppHandle) -> Result<PluginHandle<Wry>, UpdateError> {
 		})
 }
 
-pub fn capability(app: &AppHandle) -> Capability {
-	let Ok(handle) = plugin(app) else {
-		return Capability::Unsupported(Unsupported::Undetermined);
-	};
-	let response: CapabilityResponse = match handle
-		.run_mobile_plugin("capability", ())
-	{
-		Ok(response) => response,
-		Err(_) => return Capability::Unsupported(Unsupported::Undetermined),
-	};
+pub fn verdict(
+	app: &AppHandle,
+	component: &Component,
+) -> Result<bool, Unsupported> {
+	let handle = plugin(app).map_err(|_| Unsupported::Undetermined)?;
+	let response: CapabilityResponse = handle
+		.run_mobile_plugin(
+			"capability",
+			CapabilityRequest {
+				package_name: component.package(),
+			},
+		)
+		.map_err(|_| Unsupported::Undetermined)?;
 
 	if response.supported {
-		return Capability::Supported {
-			payload_suffix: super::release_asset_suffix().unwrap_or_default(),
-			can_install_now: response.can_install_now,
-		};
+		return Ok(response.can_install_now);
 	}
-	Capability::Unsupported(match response.reason.as_deref() {
+	Err(match response.reason.as_deref() {
 		Some("externally-managed") => Unsupported::ExternallyManaged {
 			installer: response
 				.installer
@@ -79,6 +106,7 @@ pub fn capability(app: &AppHandle) -> Capability {
 pub async fn install(
 	app: &AppHandle,
 	payload: &Path,
+	package_name: &str,
 ) -> Result<(), UpdateError> {
 	let path = payload.to_str().ok_or_else(|| {
 		UpdateError::Storage("staged path is not valid UTF-8".into())
@@ -87,11 +115,45 @@ pub async fn install(
 	plugin(app)?
 		.run_mobile_plugin_async::<serde_json::Value>(
 			"install",
-			InstallRequest { path },
+			InstallRequest { path, package_name },
 		)
 		.await
 		.map(|_| ())
 		.map_err(map_plugin_error)
+}
+
+pub fn probe_package(app: &AppHandle, package: &str) -> Baseline {
+	let Ok(handle) = plugin(app) else {
+		return Baseline::Unreadable {
+			why: "update plugin is not registered".to_owned(),
+		};
+	};
+	let response: PackageStateResponse = match handle.run_mobile_plugin(
+		"packageState",
+		PackageStateRequest {
+			package_name: package,
+		},
+	) {
+		Ok(response) => response,
+		Err(error) => {
+			return Baseline::Unreadable {
+				why: error.to_string(),
+			}
+		}
+	};
+	if !response.installed {
+		return Baseline::Absent;
+	}
+	match response
+		.version_name
+		.as_deref()
+		.and_then(|name| semver::Version::parse(name).ok())
+	{
+		Some(version) => Baseline::Installed { version },
+		None => Baseline::Opaque {
+			name: response.version_name,
+		},
+	}
 }
 
 pub fn hold_process<R: tauri::Runtime>(app: &AppHandle<R>, active: bool) {
@@ -119,6 +181,20 @@ pub fn take_outcome(app: &AppHandle) -> Option<Outcome> {
 		.run_mobile_plugin("takeOutcome", ())
 		.ok()?;
 	response.outcome
+}
+
+pub fn install_pending(app: &AppHandle) -> bool {
+	plugin(app)
+		.ok()
+		.and_then(|handle| {
+			handle
+				.run_mobile_plugin::<InstallPendingResponse>(
+					"installPending",
+					(),
+				)
+				.ok()
+		})
+		.is_some_and(|response| response.pending)
 }
 
 pub fn watch_install(
@@ -165,6 +241,9 @@ fn map_plugin_error(error: PluginInvokeError) -> UpdateError {
 		),
 		Some("downgrade") => UpdateError::Install(
 			"staged package is not newer than this one".into(),
+		),
+		Some("unknown-target") => UpdateError::UnknownComponent(
+			"the plugin refused that install target".into(),
 		),
 		Some("missing") => UpdateError::NothingStaged,
 		Some("install-in-progress") => {

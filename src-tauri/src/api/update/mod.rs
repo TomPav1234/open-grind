@@ -1,5 +1,7 @@
+mod baseline;
 mod client;
 pub mod commands;
+mod component;
 mod dev;
 mod download;
 mod error;
@@ -12,21 +14,43 @@ mod session;
 mod storage;
 mod verify;
 
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 
-use semver::Version;
 use tauri::{AppHandle, Emitter, Manager, Wry};
 
 pub use download::Progress;
 pub use error::UpdateError;
 pub use install::enforce_home;
 
+use baseline::InstallKind;
 use release::Candidate;
 
 #[derive(Default)]
 pub struct UpdateState {
 	downloads: download::Downloads,
-	latest: Mutex<Option<Candidate>>,
+	latest: Mutex<BTreeMap<String, Candidate>>,
+}
+
+impl UpdateState {
+	fn offer(&self, component: &str, candidate: Option<Candidate>) {
+		let mut latest = self.latest.lock().unwrap();
+		match candidate {
+			Some(candidate) => latest.insert(component.to_owned(), candidate),
+			None => latest.remove(component),
+		};
+	}
+
+	fn offered(&self, component: &str) -> Option<Candidate> {
+		self.latest.lock().unwrap().get(component).cloned()
+	}
+
+	fn withdraw_updates(&self, component: &str) {
+		self.latest.lock().unwrap().retain(|key, candidate| {
+			key != component || candidate.kind != InstallKind::Update
+		});
+		self.downloads.forget_retained_update(component);
+	}
 }
 
 pub fn plugin() -> tauri::plugin::TauriPlugin<Wry> {
@@ -46,10 +70,20 @@ pub fn plugin() -> tauri::plugin::TauriPlugin<Wry> {
 			let app = app.clone();
 			tauri::async_runtime::spawn_blocking(move || {
 				install::sweep_replaced();
-				if let (Ok(root), Ok(current)) =
-					(storage::root(&app), current_version(&app))
-				{
-					storage::purge(&root, &current, None);
+				if let Ok(root) = storage::root(&app) {
+					storage::sweep_foreign(&root);
+				}
+				for component in component::ALL {
+					let Ok(root) = storage::component_root(&app, component)
+					else {
+						continue;
+					};
+					storage::purge(
+						component,
+						&root,
+						&install::probe(&app, component),
+						None,
+					);
 				}
 			});
 			Ok(())
@@ -76,6 +110,63 @@ fn watch_installs(app: &AppHandle) {
 
 fn current_version<R: tauri::Runtime>(
 	app: &AppHandle<R>,
-) -> Result<Version, UpdateError> {
-	Ok(app.package_info().version.clone())
+) -> baseline::HostVersion {
+	baseline::HostVersion::of(app.package_info().version.clone())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::release::Artifact;
+	use super::*;
+
+	fn offer_of(kind: InstallKind) -> Candidate {
+		Candidate {
+			component: component::GOOGLE_OAUTH.key.into(),
+			kind,
+			tag: "v1.1.0".into(),
+			version: "1.1.0".into(),
+			notes: None,
+			published_at: None,
+			payload: Artifact {
+				name: "open-grind-google-oauth-v1.1.0-arm64-v8a.apk".into(),
+				url: format!("{}a.apk", client::origin()),
+				uuid: "uuid".into(),
+				size: 4,
+			},
+			signature: Artifact {
+				name: "open-grind-google-oauth-v1.1.0-arm64-v8a.apk.minisig"
+					.into(),
+				url: format!("{}a.apk.minisig", client::origin()),
+				uuid: "sig".into(),
+				size: 228,
+			},
+		}
+	}
+
+	#[test]
+	fn an_unattended_tick_keeps_a_first_install_the_user_asked_for() {
+		let state = UpdateState::default();
+		let key = component::GOOGLE_OAUTH.key;
+		state.offer(key, Some(offer_of(InstallKind::Install)));
+
+		state.withdraw_updates(key);
+
+		assert_eq!(state.offered(key), Some(offer_of(InstallKind::Install)));
+	}
+
+	#[test]
+	fn an_update_for_a_removed_target_is_withdrawn() {
+		let state = UpdateState::default();
+		let key = component::GOOGLE_OAUTH.key;
+		state.offer(component::APP.key, Some(offer_of(InstallKind::Update)));
+		state.offer(key, Some(offer_of(InstallKind::Update)));
+
+		state.withdraw_updates(key);
+
+		assert_eq!(state.offered(key), None);
+		assert!(
+			state.offered(component::APP.key).is_some(),
+			"another component's offer is not this target's to withdraw"
+		);
+	}
 }

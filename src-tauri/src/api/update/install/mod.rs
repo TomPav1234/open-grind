@@ -7,7 +7,8 @@ mod desktop;
 
 use serde::{Deserialize, Serialize};
 
-use super::error::UpdateError;
+use super::baseline::Baseline;
+use super::component::Component;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(
@@ -40,20 +41,11 @@ pub enum Capability {
 	Unsupported(Unsupported),
 }
 
-impl Capability {
-	pub fn require(self) -> Result<String, UpdateError> {
-		match self {
-			Capability::Supported { payload_suffix, .. } => Ok(payload_suffix),
-			Capability::Unsupported(reason) => {
-				Err(UpdateError::Unsupported(reason))
-			}
-		}
-	}
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Outcome {
+	#[serde(default)]
+	pub package_name: Option<String>,
 	pub succeeded: bool,
 	#[serde(default)]
 	pub canceled: bool,
@@ -83,13 +75,43 @@ pub fn release_asset_suffix() -> Option<String> {
 	suffix_for(os, std::env::consts::ARCH)
 }
 
+fn target() -> String {
+	format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)
+}
+
+pub fn capability_for(
+	app: &tauri::AppHandle,
+	component: &Component,
+) -> Capability {
+	let can_install_now = match platform::verdict(app, component) {
+		Ok(can_install_now) => can_install_now,
+		Err(reason) => return Capability::Unsupported(reason),
+	};
+	match (component.asset_suffix)() {
+		Some(payload_suffix) => Capability::Supported {
+			payload_suffix,
+			can_install_now,
+		},
+		None => Capability::Unsupported(Unsupported::NoReleaseArtifacts {
+			target: target(),
+		}),
+	}
+}
+
+pub fn probe(app: &tauri::AppHandle, component: &Component) -> Baseline {
+	match component.package() {
+		None => Baseline::of_version(app.package_info().version.clone()),
+		Some(package) => platform::probe_package(app, package),
+	}
+}
+
 #[cfg(target_os = "android")]
 use android as platform;
 #[cfg(not(target_os = "android"))]
 use desktop as platform;
 
 pub use platform::{
-	capability, enforce_home, hold_process, install,
+	enforce_home, hold_process, install, install_pending,
 	open_install_permission_settings, sweep_replaced, take_outcome,
 	watch_install,
 };
@@ -109,6 +131,76 @@ mod pins {
 
 	fn hex64(line: &str) -> bool {
 		line.len() == 64 && line.chars().all(|c| c.is_ascii_hexdigit())
+	}
+
+	const PLUGIN: &str = include_str!(
+		"../../../../gen/android/app/src/main/java/org/opengrind/update/UpdatePlugin.kt"
+	);
+
+	const ANDROID_BRIDGE: &str = include_str!("android.rs");
+
+	#[test]
+	fn every_literal_plugin_command_the_bridge_invokes_exists_in_kotlin() {
+		let invoked: Vec<&str> = ANDROID_BRIDGE
+			.split("run_mobile_plugin")
+			.skip(1)
+			.filter_map(|call| {
+				let arguments = call[call.find('(')? + 1..].trim_start();
+				arguments.strip_prefix('"')?.split('"').next()
+			})
+			.collect();
+		assert!(
+			invoked.contains(&"installPending"),
+			"the bridge no longer asks the plugin whether an install is pending"
+		);
+		for command in invoked {
+			assert!(
+				PLUGIN.contains(&format!(
+					"@Command\n\tfun {command}(invoke: Invoke)"
+				)),
+				"UpdatePlugin has no @Command named {command}"
+			);
+		}
+	}
+
+	#[test]
+	fn the_kotlin_install_allowlist_matches_the_component_table() {
+		use super::super::component;
+
+		let start = PLUGIN
+			.find("const val GOOGLE_OAUTH")
+			.expect("UpdatePlugin pins the addon package id");
+		let pinned = PLUGIN[start..]
+			.split('"')
+			.nth(1)
+			.expect("the pin holds a string literal");
+		assert_eq!(pinned, component::GOOGLE_OAUTH.install_target());
+
+		let allowlisted: Vec<&str> = component::ALL
+			.iter()
+			.map(|c| c.install_target())
+			.filter(|target| *target != component::SELF_PACKAGE)
+			.collect();
+		assert_eq!(
+			allowlisted,
+			vec![pinned],
+			"every non-self component must appear in the Kotlin allowlist"
+		);
+		assert!(
+			PLUGIN.contains("packageName == activity.packageName"),
+			"the allowlist must still admit this app itself"
+		);
+		assert!(
+			PLUGIN.contains("packageName == GOOGLE_OAUTH"),
+			"isInstallableTarget must admit the addon package"
+		);
+		for target in &allowlisted {
+			assert!(
+				MANIFEST
+					.contains(&format!("<package android:name=\"{target}\" />")),
+				"{target} needs a <queries> entry or the package probe reports it absent"
+			);
+		}
 	}
 
 	#[test]

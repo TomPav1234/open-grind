@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -5,9 +6,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
+use super::baseline::Baseline;
+use super::component::{self, Component};
 use super::error::UpdateError;
 
-const SCHEMA: u32 = 1;
+const SCHEMA: u32 = 2;
 const LEDGER_FILE: &str = "update-check.json";
 
 const MIN_INTERVAL_SECS: u64 = 24 * 60 * 60;
@@ -17,7 +20,36 @@ const JITTER_SECS: u64 = 6 * 60 * 60;
 pub struct Ledger {
 	pub schema: u32,
 	pub auto_check: bool,
-	pub next_check_at: u64,
+	pub components: BTreeMap<String, u64>,
+}
+
+#[derive(Deserialize)]
+struct LedgerV1 {
+	schema: u32,
+	auto_check: bool,
+	next_check_at: u64,
+}
+
+impl Ledger {
+	pub fn due_at(&self, component: &Component) -> Option<u64> {
+		self.components.get(component.key).copied()
+	}
+
+	fn record(&mut self, component: &Component, now: u64) {
+		self.components
+			.insert(component.key.to_owned(), next_due_from(now));
+	}
+
+	fn seeded(mut self, now: u64) -> Self {
+		for component in component::ALL {
+			self.components
+				.entry(component.key.to_owned())
+				.or_insert_with(|| next_due_from(now));
+		}
+		self.components
+			.retain(|key, _| component::is_known_key(key));
+		self
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -64,23 +96,62 @@ fn path(app: &AppHandle) -> Result<PathBuf, UpdateError> {
 
 pub fn load(app: &AppHandle) -> Result<Ledger, UpdateError> {
 	let path = path(app)?;
-	let stored = fs::read(&path)
-		.ok()
-		.and_then(|raw| serde_json::from_slice::<Ledger>(&raw).ok())
-		.filter(|ledger| ledger.schema == SCHEMA);
-
-	match stored {
-		Some(ledger) => Ok(ledger),
-		None => {
-			let fresh = Ledger {
-				schema: SCHEMA,
-				auto_check: false,
-				next_check_at: next_due_from(now_secs()),
-			};
-			save(app, &fresh)?;
-			Ok(fresh)
-		}
+	let raw = fs::read(&path).ok();
+	let Decoded { ledger, needs_save } = decode(raw.as_deref(), now_secs());
+	if needs_save {
+		save(app, &ledger)?;
 	}
+	Ok(ledger)
+}
+
+struct Decoded {
+	ledger: Ledger,
+	needs_save: bool,
+}
+
+fn decode(raw: Option<&[u8]>, now: u64) -> Decoded {
+	let current = raw
+		.and_then(|raw| serde_json::from_slice::<Ledger>(raw).ok())
+		.filter(|ledger| ledger.schema == SCHEMA);
+	if let Some(ledger) = current {
+		let seeded = ledger.clone().seeded(now);
+		return Decoded {
+			needs_save: seeded != ledger,
+			ledger: seeded,
+		};
+	}
+
+	if let Some(migrated) = raw.and_then(migrated_from_v1) {
+		return Decoded {
+			ledger: migrated.seeded(now),
+			needs_save: true,
+		};
+	}
+
+	let fresh = Ledger {
+		schema: SCHEMA,
+		auto_check: false,
+		components: BTreeMap::new(),
+	};
+	Decoded {
+		ledger: fresh.seeded(now),
+		needs_save: true,
+	}
+}
+
+fn migrated_from_v1(raw: &[u8]) -> Option<Ledger> {
+	let old: LedgerV1 = serde_json::from_slice(raw).ok()?;
+	if old.schema != 1 {
+		return None;
+	}
+	Some(Ledger {
+		schema: SCHEMA,
+		auto_check: old.auto_check,
+		components: BTreeMap::from([(
+			component::APP_KEY.to_owned(),
+			old.next_check_at,
+		)]),
+	})
 }
 
 pub fn save(app: &AppHandle, ledger: &Ledger) -> Result<(), UpdateError> {
@@ -100,7 +171,10 @@ pub fn set_auto_check(
 	}
 	ledger.auto_check = enabled;
 	if enabled {
-		ledger.next_check_at = next_due_from(now_secs());
+		let now = now_secs();
+		for due in ledger.components.values_mut() {
+			*due = next_due_from(now);
+		}
 	}
 	save(app, &ledger)?;
 	Ok(ledger)
@@ -108,6 +182,7 @@ pub fn set_auto_check(
 
 pub fn admit(
 	ledger: &Ledger,
+	component: &Component,
 	trigger: Trigger,
 	now: u64,
 ) -> Result<(), UpdateError> {
@@ -120,7 +195,10 @@ pub fn admit(
 	if trigger == Trigger::Launch {
 		return Ok(());
 	}
-	let due_at = ledger.next_check_at.min(latest_plausible_due(now));
+	let due_at = ledger
+		.due_at(component)
+		.unwrap_or_else(|| next_due_from(now))
+		.min(latest_plausible_due(now));
 	if now < due_at {
 		return Err(UpdateError::CheckTooSoon {
 			retry_after_secs: due_at - now,
@@ -129,11 +207,22 @@ pub fn admit(
 	Ok(())
 }
 
+pub fn worth_checking(
+	component: &Component,
+	baseline: &Baseline,
+	trigger: Trigger,
+) -> bool {
+	let user_asked = trigger == Trigger::Manual;
+	let installed = component.is_self() || baseline.present();
+	user_asked || installed
+}
+
 pub fn record_check(
 	app: &AppHandle,
 	ledger: &mut Ledger,
+	component: &Component,
 ) -> Result<(), UpdateError> {
-	ledger.next_check_at = next_due_from(now_secs());
+	ledger.record(component, now_secs());
 	save(app, ledger)
 }
 
@@ -145,22 +234,195 @@ mod tests {
 		Ledger {
 			schema: SCHEMA,
 			auto_check,
-			next_check_at,
+			components: BTreeMap::from([(
+				component::APP_KEY.to_owned(),
+				next_check_at,
+			)]),
 		}
 	}
 
 	#[test]
+	fn an_absent_addon_is_only_ever_checked_on_purpose() {
+		for trigger in [Trigger::Launch, Trigger::Automatic] {
+			assert!(
+				!worth_checking(
+					&component::GOOGLE_OAUTH,
+					&Baseline::Absent,
+					trigger
+				),
+				"an unattended {trigger:?} check would disclose interest in \
+				 an addon the user never asked for"
+			);
+			assert!(
+				worth_checking(&component::APP, &Baseline::Absent, trigger),
+				"the app itself is always installed, so it always checks"
+			);
+		}
+
+		assert!(worth_checking(
+			&component::GOOGLE_OAUTH,
+			&Baseline::Absent,
+			Trigger::Manual
+		));
+		assert!(worth_checking(
+			&component::GOOGLE_OAUTH,
+			&Baseline::of_version(semver::Version::new(1, 1, 0)),
+			Trigger::Automatic
+		));
+	}
+
+	#[test]
+	fn recording_one_components_check_does_not_move_anothers_due_date() {
+		let mut ledger = ledger(true, 999_999);
+		ledger
+			.components
+			.insert(component::GOOGLE_OAUTH.key.to_owned(), 10_000);
+
+		ledger.record(&component::GOOGLE_OAUTH, 10_000);
+
+		assert_eq!(ledger.due_at(&component::APP), Some(999_999));
+		assert!(
+			ledger.due_at(&component::GOOGLE_OAUTH)
+				>= Some(10_000 + MIN_INTERVAL_SECS)
+		);
+	}
+
+	#[test]
+	fn admission_reads_only_the_components_own_due_date() {
+		let mut ledger = ledger(true, 10_000);
+		ledger
+			.components
+			.insert(component::GOOGLE_OAUTH.key.to_owned(), 10_000);
+
+		ledger
+			.components
+			.insert(component::APP_KEY.to_owned(), 999_999);
+
+		assert!(admit(
+			&ledger,
+			&component::GOOGLE_OAUTH,
+			Trigger::Automatic,
+			10_000
+		)
+		.is_ok());
+		assert!(matches!(
+			admit(&ledger, &component::APP, Trigger::Automatic, 10_000),
+			Err(UpdateError::CheckTooSoon { .. })
+		));
+	}
+
+	#[test]
+	fn a_component_with_no_record_waits_a_full_interval() {
+		let bare = Ledger {
+			schema: SCHEMA,
+			auto_check: true,
+			components: BTreeMap::new(),
+		};
+		let error = admit(&bare, &component::APP, Trigger::Automatic, 10_000)
+			.unwrap_err();
+		let UpdateError::CheckTooSoon { retry_after_secs } = error else {
+			panic!("a component nobody has checked must not be due at once");
+		};
+		assert!(retry_after_secs >= MIN_INTERVAL_SECS);
+	}
+
+	#[test]
+	fn seeding_gives_every_component_a_date_and_forgets_retired_ones() {
+		let seeded = Ledger {
+			schema: SCHEMA,
+			auto_check: true,
+			components: BTreeMap::from([
+				("retired-component".to_owned(), 1),
+				(component::APP_KEY.to_owned(), 4_242),
+			]),
+		}
+		.seeded(10_000);
+
+		assert_eq!(seeded.due_at(&component::APP), Some(4_242));
+		assert!(seeded.due_at(&component::GOOGLE_OAUTH).is_some());
+		assert!(!seeded.components.contains_key("retired-component"));
+		assert_eq!(seeded.components.len(), component::ALL.len());
+	}
+
+	#[test]
+	fn the_ledger_is_stored_in_snake_case() {
+		let encoded =
+			serde_json::to_string(&ledger(true, 4_242)).expect("encodes");
+		assert!(encoded.contains("\"auto_check\""), "{encoded}");
+		assert!(encoded.contains("\"components\""), "{encoded}");
+		assert!(!encoded.contains("autoCheck"), "{encoded}");
+	}
+
+	#[test]
+	fn decoding_a_v1_document_migrates_it_rather_than_starting_over() {
+		let v1 = br#"{"schema":1,"auto_check":true,"next_check_at":4242}"#;
+		let Decoded { ledger, needs_save } = decode(Some(v1), 10_000);
+
+		assert!(ledger.auto_check, "consent must survive the upgrade");
+		assert_eq!(ledger.due_at(&component::APP), Some(4_242));
+		assert!(needs_save, "a migrated ledger must be written back");
+		assert!(ledger.due_at(&component::GOOGLE_OAUTH).is_some());
+	}
+
+	#[test]
+	fn decoding_nothing_opts_the_user_out_and_saves() {
+		let Decoded { ledger, needs_save } = decode(None, 10_000);
+		assert!(!ledger.auto_check);
+		assert!(needs_save);
+
+		assert!(!decode(Some(b"} not json {"), 10_000).ledger.auto_check);
+	}
+
+	#[test]
+	fn decoding_a_current_document_leaves_it_alone() {
+		let encoded = serde_json::to_vec(&ledger(true, 4_242).seeded(0))
+			.expect("encodes");
+		let Decoded { ledger, needs_save } = decode(Some(&encoded), 10_000);
+
+		assert!(ledger.auto_check);
+		assert_eq!(ledger.due_at(&component::APP), Some(4_242));
+		assert!(!needs_save, "an unchanged ledger must not be rewritten");
+	}
+
+	#[test]
+	fn an_upgraded_ledger_keeps_the_consent_and_the_apps_due_date() {
+		let v1 = br#"{"schema":1,"auto_check":true,"next_check_at":4242}"#;
+		let migrated = migrated_from_v1(v1).expect("v1 ledger migrates");
+
+		assert!(migrated.auto_check, "consent must survive the upgrade");
+		assert_eq!(migrated.due_at(&component::APP), Some(4_242));
+		assert_eq!(migrated.schema, SCHEMA);
+
+		let off = br#"{"schema":1,"auto_check":false,"next_check_at":1}"#;
+		assert!(!migrated_from_v1(off).unwrap().auto_check);
+
+		assert!(
+			migrated_from_v1(br#"{"schema":2,"auto_check":true}"#).is_none(),
+			"only a v1 document may be migrated"
+		);
+	}
+
+	#[test]
 	fn automatic_checks_are_off_until_turned_on() {
-		let error =
-			admit(&ledger(false, 0), Trigger::Automatic, 10_000).unwrap_err();
+		let error = admit(
+			&ledger(false, 0),
+			&component::APP,
+			Trigger::Automatic,
+			10_000,
+		)
+		.unwrap_err();
 		assert!(matches!(error, UpdateError::AutoChecksDisabled));
 	}
 
 	#[test]
 	fn automatic_checks_wait_for_the_interval() {
 		let ledger = ledger(true, 10_000);
-		assert!(admit(&ledger, Trigger::Automatic, 9_999).is_err());
-		assert!(admit(&ledger, Trigger::Automatic, 10_000).is_ok());
+		assert!(
+			admit(&ledger, &component::APP, Trigger::Automatic, 9_999).is_err()
+		);
+		assert!(
+			admit(&ledger, &component::APP, Trigger::Automatic, 10_000).is_ok()
+		);
 	}
 
 	#[test]
@@ -168,7 +430,13 @@ mod tests {
 		let ledger = ledger(true, 10_000);
 		let requests_admitted = (0..500)
 			.filter(|launch| {
-				admit(&ledger, Trigger::Automatic, 9_000 + launch).is_ok()
+				admit(
+					&ledger,
+					&component::APP,
+					Trigger::Automatic,
+					9_000 + launch,
+				)
+				.is_ok()
 			})
 			.count();
 		assert_eq!(requests_admitted, 0);
@@ -176,25 +444,31 @@ mod tests {
 
 	#[test]
 	fn a_launch_check_ignores_the_interval_but_not_the_opt_in() {
-		let due_later = Ledger {
-			schema: SCHEMA,
-			auto_check: true,
-			next_check_at: 10_000 + MIN_INTERVAL_SECS,
-		};
-		assert!(admit(&due_later, Trigger::Launch, 10_000).is_ok());
+		let due_later = ledger(true, 10_000 + MIN_INTERVAL_SECS);
+		assert!(
+			admit(&due_later, &component::APP, Trigger::Launch, 10_000).is_ok()
+		);
 		assert!(matches!(
-			admit(&due_later, Trigger::Automatic, 10_000).unwrap_err(),
+			admit(&due_later, &component::APP, Trigger::Automatic, 10_000)
+				.unwrap_err(),
 			UpdateError::CheckTooSoon { .. }
 		));
 		assert!(matches!(
-			admit(&ledger(false, 0), Trigger::Launch, 10_000).unwrap_err(),
+			admit(&ledger(false, 0), &component::APP, Trigger::Launch, 10_000)
+				.unwrap_err(),
 			UpdateError::AutoChecksDisabled
 		));
 	}
 
 	#[test]
 	fn a_manual_check_always_runs() {
-		assert!(admit(&ledger(false, u64::MAX), Trigger::Manual, 0).is_ok());
+		assert!(admit(
+			&ledger(false, u64::MAX),
+			&component::APP,
+			Trigger::Manual,
+			0
+		)
+		.is_ok());
 	}
 
 	#[test]
@@ -211,13 +485,10 @@ mod tests {
 	#[test]
 	fn a_corrupt_far_future_due_time_cannot_park_auto_checks_forever() {
 		let now = 1_000_000;
-		let ledger = Ledger {
-			schema: SCHEMA,
-			auto_check: true,
-			next_check_at: now + 4000 * MIN_INTERVAL_SECS,
-		};
+		let ledger = ledger(true, now + 4000 * MIN_INTERVAL_SECS);
 
-		let error = admit(&ledger, Trigger::Automatic, now).unwrap_err();
+		let error = admit(&ledger, &component::APP, Trigger::Automatic, now)
+			.unwrap_err();
 		let UpdateError::CheckTooSoon { retry_after_secs } = error else {
 			panic!("expected CheckTooSoon");
 		};
@@ -230,6 +501,12 @@ mod tests {
 	#[test]
 	fn a_rolled_back_clock_cannot_bring_a_check_forward() {
 		let ledger = ledger(true, next_due_from(1_700_000_000));
-		assert!(admit(&ledger, Trigger::Automatic, 1_600_000_000).is_err());
+		assert!(admit(
+			&ledger,
+			&component::APP,
+			Trigger::Automatic,
+			1_600_000_000
+		)
+		.is_err());
 	}
 }
