@@ -20,19 +20,6 @@ describe("buildCascadeQuery", () => {
 		expect(query.genders).toEqual([1]);
 	});
 
-	it("leaves genders out when only Ask me is selected", () => {
-		const query = buildCascadeQuery({
-			geohash,
-			filters: {
-				...defaultFilters,
-				genderEnabled: true,
-				genders: [GENDER_ASK_ME],
-			},
-		});
-
-		expect(query).not.toHaveProperty("genders");
-	});
-
 	it("never sends the Trans tribe, which moved to genders", () => {
 		const query = buildCascadeQuery({
 			geohash,
@@ -46,17 +33,29 @@ describe("buildCascadeQuery", () => {
 		expect(query.tribes).toEqual([Tribe.Bear]);
 	});
 
-	it("leaves tribes out when only the Trans tribe is selected", () => {
+	it("leaves out a list filter that is on but has nothing sendable", () => {
 		const query = buildCascadeQuery({
 			geohash,
 			filters: {
 				...defaultFilters,
+				genderEnabled: true,
+				genders: [GENDER_ASK_ME],
 				tribesEnabled: true,
 				tribes: [Tribe.Trans],
+				positionEnabled: true,
+				bodyTypesEnabled: true,
+				relationshipStatusesEnabled: true,
+				acceptNSFWPicsEnabled: true,
+				lookingForEnabled: true,
+				meetAtEnabled: true,
+				healthPracticesEnabled: true,
+				tagsEnabled: true,
 			},
 		});
 
-		expect(query).not.toHaveProperty("tribes");
+		expect(
+			Object.entries(query).filter(([, value]) => value !== undefined),
+		).toEqual([["nearbyGeoHash", geohash]]);
 	});
 });
 
