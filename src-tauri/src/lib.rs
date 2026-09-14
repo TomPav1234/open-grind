@@ -143,7 +143,8 @@ pub fn run() {
 	#[cfg(target_os = "android")]
 	let builder = builder
 		.plugin(tauri_plugin_android_fs::init())
-		.plugin(photo::plugin());
+		.plugin(photo::plugin())
+		.plugin(api::recaptcha::plugin());
 
 	builder
         .plugin(open_grind_platform_plugin())

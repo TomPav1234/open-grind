@@ -18,6 +18,8 @@ const RELEASES: Record<ComponentKey, string> = {
 	app: "https://git.opengrind.org/open-grind/open-grind/releases/tag",
 	"google-oauth":
 		"https://git.opengrind.org/open-grind/open-grind-google-oauth-android-app/releases/tag",
+	recaptcha:
+		"https://git.opengrind.org/open-grind/recaptcha-helper/releases/tag",
 };
 const INSTALLED_TOAST = "update-installed";
 const CHECK_RESULT_TOAST = "update-check-result";

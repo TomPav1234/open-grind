@@ -198,7 +198,7 @@ mod tests {
 			);
 			assert!(
 				plugin.contains(&format!(
-					"CompanionGate.Verdict.{verdict} -> invoke.reject({kotlin})"
+					"AddonGate.Verdict.{verdict} -> invoke.reject({kotlin})"
 				)),
 				"GoogleOauthPlugin.getToken no longer rejects {verdict} with {kotlin}"
 			);
