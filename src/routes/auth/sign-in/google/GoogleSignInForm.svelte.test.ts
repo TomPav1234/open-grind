@@ -24,7 +24,7 @@ import {
 import type { Capability } from "$lib/updates/types";
 
 const COMPANION_RELEASES =
-	"https://git.opengrind.org/open-grind/open-grind-google-oauth-android-app/releases#install";
+	"https://git.opengrind.org/open-grind/google-oauth-app/releases#install";
 const SCREEN_URL = "http://localhost/auth/sign-in/google";
 
 const fake = updateApiFake();

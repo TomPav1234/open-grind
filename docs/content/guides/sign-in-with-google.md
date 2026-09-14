@@ -31,7 +31,7 @@ If Open Grind says the Google OAuth app is turned off, turn it on in Android set
 
 Once the Google OAuth app is installed, you can check it for updates from Settings → App: automatically when "Check updates automatically" is on (on store-installed builds it reads "Check add-on updates automatically"), or anytime with "Check for updates".
 
-To install it yourself instead, download the build for your device's CPU architecture from the [Google OAuth app's Releases page](https://git.opengrind.org/open-grind/open-grind-google-oauth-android-app/releases) — 98% of devices today support arm64-v8a, so **try arm64-v8a.apk first**.
+To install it yourself instead, download the build for your device's CPU architecture from the [Google OAuth app's Releases page](https://git.opengrind.org/open-grind/google-oauth-app/releases) — 98% of devices today support arm64-v8a, so **try arm64-v8a.apk first**.
 
 ### Manual Google OAuth copy-paste (advanced)
 

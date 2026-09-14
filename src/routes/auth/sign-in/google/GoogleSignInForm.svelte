@@ -35,7 +35,7 @@
 	} from "./google-sign-in-view";
 
 	const COMPANION_RELEASES =
-		"https://git.opengrind.org/open-grind/open-grind-google-oauth-android-app/releases#install";
+		"https://git.opengrind.org/open-grind/google-oauth-app/releases#install";
 	const automated = isAndroidPlatform();
 
 	let token = $state("");

@@ -50,7 +50,8 @@ pub static APP: Component = Component {
 
 pub static GOOGLE_OAUTH: Component = Component {
 	key: "google-oauth",
-	index_path: "api/v1/repos/open-grind/open-grind-google-oauth-android-app/releases?limit=3&draft=false",
+	index_path:
+		"api/v1/repos/open-grind/google-oauth-app/releases?limit=3&draft=false",
 	asset_stem: "open-grind-google-oauth",
 	asset_suffix: abi_asset_suffix,
 	target: Target::Package("org.opengrind.google_oauth"),
