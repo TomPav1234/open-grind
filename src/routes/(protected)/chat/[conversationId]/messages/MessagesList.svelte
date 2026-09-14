@@ -6,6 +6,7 @@
 		deleteMessageForMe,
 		unsendMessage,
 	} from "$lib/api/messaging/messages";
+	import ReportSheet from "$lib/components/report/ReportSheet.svelte";
 	import { offerEntitlementBypass } from "$lib/entitlements/bypass.svelte";
 	import {
 		type ConversationState,
@@ -15,6 +16,9 @@
 	import Message from "./message/Message.svelte";
 
 	let { seenMessageIds }: { seenMessageIds: Set<string> } = $props();
+
+	let reportOpen = $state(false);
+	let reportProfileId = $state<number | null>(null);
 
 	const conversationState = $derived(getConversationState()());
 
@@ -99,6 +103,13 @@
 		!message.unsent
 			? () => conversationState.setReplyTo(message)
 			: undefined}
+		onReport={!isOut && conversationState.profile
+			? () => {
+					reportProfileId =
+						conversationState.profile?.profileId ?? null;
+					reportOpen = reportProfileId !== null;
+				}
+			: undefined}
 		onReact={async (reactionType: number) => {
 			try {
 				await conversationState.reactTo({
@@ -118,3 +129,11 @@
 			: undefined}
 	/>
 {/each}
+
+{#if reportProfileId !== null}
+	<ReportSheet
+		bind:open={reportOpen}
+		profileId={reportProfileId}
+		locations={["CHAT_MESSAGE"]}
+	/>
+{/if}

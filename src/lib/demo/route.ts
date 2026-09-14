@@ -2,6 +2,11 @@ import {
 	albumShareRequestSchema,
 	albumUnshareRequestSchema,
 } from "$lib/model/messaging/albums";
+import {
+	profileReportRequestSchema,
+	profileReportRequestV2Schema,
+	rightNowPostReportRequestSchema,
+} from "$lib/model/safety/reports";
 import { accountPreferencesUpdateSchema } from "$lib/model/settings/account";
 import type { InboxFilterRequest } from "$lib/api/messaging/conversations";
 import type { FavoriteNote } from "$lib/model/users/favorites";
@@ -49,6 +54,12 @@ import { demoReceivedTaps, demoViews } from "./mock/interest";
 import { profileSeed } from "./mock/profiles";
 import { demoGenders, demoPronouns, demoTags } from "./mock/reference";
 import {
+	demoProfileReport,
+	demoReportProfile,
+	demoReportRightNowPost,
+	demoRightNowPostReport,
+} from "./mock/reports";
+import {
 	demoAccountPreferences,
 	demoSetAccountPreferences,
 } from "./mock/settings";
@@ -73,6 +84,8 @@ export function demoCallMethod(method: string): unknown {
 			return { "user-agent": "demo", "l-device-info": "demo" };
 		case "recaptcha_first_party_enabled":
 			return false;
+		case "mint_recaptcha_token":
+			return "demo-recaptcha-token";
 		case "session_health":
 			return { signedIn: true, expiresAt: null, stale: false };
 		case "storage_backend":
@@ -330,6 +343,56 @@ export function demoRoute({
 			return ok({});
 		}
 		return ok(demoAccountPreferences());
+	}
+	if (
+		segments.length === 3 &&
+		segments[1] === "flags" &&
+		(segments[0] === "v3.1" || segments[0] === "v4" || segments[0] === "v5")
+	) {
+		const profileId = Number(segments[2]);
+		if (method === "GET" && segments[0] !== "v5") {
+			const report = demoProfileReport(profileId);
+			return report === null ? { status: 404, body: null } : ok(report);
+		}
+		if (method === "POST") {
+			(segments[0] === "v5"
+				? profileReportRequestV2Schema
+				: profileReportRequestSchema
+			).parse(body);
+			demoReportProfile(profileId);
+			return ok({});
+		}
+	}
+	if (
+		segments.length === 4 &&
+		segments[0] === "v1" &&
+		segments[1] === "flags" &&
+		segments[2] === "right-now"
+	) {
+		const postId = Number(segments[3]);
+		if (method === "GET") {
+			const flagReport = demoRightNowPostReport(postId);
+			return flagReport === null
+				? { status: 404, body: null }
+				: ok({ flagReport });
+		}
+		if (method === "POST") {
+			rightNowPostReportRequestSchema.parse(body);
+			demoReportRightNowPost(postId);
+			return ok({});
+		}
+	}
+	if (method === "GET" && rawPath === "/v3/assignment") {
+		return ok({
+			assignments: [
+				{
+					key: "right-now-moderation",
+					value: "on",
+					payload: {},
+					type: "FEATURE_FLAG",
+				},
+			],
+		});
 	}
 
 	return ok({});

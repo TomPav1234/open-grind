@@ -11,7 +11,7 @@
 	import { blockUser } from "$lib/api/browse/blocks";
 	import { hideUser } from "$lib/api/browse/hides";
 	import { showErrorToast } from "$lib/api/error-toast";
-	import ToastUnimplemented from "$lib/components/feedback/ToastUnimplemented.svelte";
+	import ReportSheet from "$lib/components/report/ReportSheet.svelte";
 	import { Button } from "$lib/components/ui/button";
 	import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
 
@@ -23,6 +23,7 @@
 		$props();
 
 	let submitting = $state(false);
+	let reportOpen = $state(false);
 </script>
 
 <DropdownMenu.Root>
@@ -60,13 +61,7 @@
 			<CopyIcon class="size-5" />
 			Copy profile ID
 		</DropdownMenu.Item>
-		<DropdownMenu.Item
-			onSelect={() => {
-				toast(ToastUnimplemented, {
-					componentProps: { feature: "Report profile", issue: 41 },
-				});
-			}}
-		>
+		<DropdownMenu.Item onSelect={() => (reportOpen = true)}>
 			<FlagIcon class="size-5" />
 			Report profile
 		</DropdownMenu.Item>
@@ -100,3 +95,5 @@
 		</DropdownMenu.Item>
 	</DropdownMenu.Content>
 </DropdownMenu.Root>
+
+<ReportSheet bind:open={reportOpen} {profileId} {onBlocked} />
