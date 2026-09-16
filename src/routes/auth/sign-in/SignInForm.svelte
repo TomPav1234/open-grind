@@ -8,12 +8,14 @@
 	import { callMethod } from "$lib/api/methods";
 	import {
 		companionDisabled,
+		companionRefused,
 		companionUnavailable,
 		companionUntrusted,
 		disabledCompanionMessage,
 		finishSignIn,
+		refusedCompanionMessage,
 		reportSignInFailure,
-		untrustedCompanionCopy,
+		untrustedCompanionMessage,
 	} from "$lib/api/sign-in";
 	import { Button } from "$lib/components/ui/button";
 	import * as Card from "$lib/components/ui/card";
@@ -40,7 +42,11 @@
 				[companionDisabled]: () =>
 					toast.error(disabledCompanionMessage),
 				[companionUntrusted]: () => {
-					toast.error(untrustedCompanionCopy());
+					toast.error(untrustedCompanionMessage);
+					void goto("/auth/sign-in/google?paste");
+				},
+				[companionRefused]: () => {
+					toast.error(refusedCompanionMessage);
 					void goto("/auth/sign-in/google?paste");
 				},
 			},

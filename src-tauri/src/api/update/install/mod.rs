@@ -193,12 +193,18 @@ mod pins {
 	const MINT_TOKEN_PERMISSION: &str =
 		"org.opengrind.recaptcha.permission.MINT_TOKEN";
 
+	const SIGNING_CERTIFICATES: &str = include_str!(
+		"../../../../gen/android/app/src/main/java/org/opengrind/addon/PackageSigningCertificates.kt"
+	);
+
+	const ADDON_LAUNCH_CHECK: &str = include_str!(
+		"../../../../gen/android/app/src/main/java/org/opengrind/addon/AddonLaunchCheck.kt"
+	);
+
 	const REQUEST_TOKEN_PERMISSION: &str =
 		"org.opengrind.google_oauth.permission.REQUEST_TOKEN";
 	const REQUEST_TOKEN_ACTION: &str =
 		"org.opengrind.google_oauth.action.REQUEST_TOKEN";
-	const RECEIVE_TOKEN_PERMISSION: &str =
-		"org.opengrind.permission.RECEIVE_GOOGLE_TOKEN";
 	const TOKEN_EXTRA: &str = "org.opengrind.google_oauth.extra.TOKEN";
 
 	fn squashed(source: &str) -> String {
@@ -495,15 +501,15 @@ mod pins {
 		);
 
 		assert!(
-			manifest_element("permission", RECEIVE_TOKEN_PERMISSION)
-				.contains("android:protectionLevel=\"signature\""),
-			"{RECEIVE_TOKEN_PERMISSION} is no longer a signature permission, so any app could hand over a token"
+			!manifest_element("activity", ".TokenHandoffActivity")
+				.contains("android:permission="),
+			"TokenHandoffActivity requires a permission again, which a Play-signed install can never grant the companion"
 		);
 		assert!(
-			manifest_element("activity", ".TokenHandoffActivity").contains(
-				&format!("android:permission=\"{RECEIVE_TOKEN_PERMISSION}\"")
-			),
-			"TokenHandoffActivity is no longer guarded by {RECEIVE_TOKEN_PERMISSION}"
+			squashed(TOKEN_HANDOFF).contains(&squashed(
+				"AddonGate.acceptsCaller( callingPackage = callingPackage, addonPackage = COMPANION_PACKAGE, certificates = packageManager.signingCertificates(), )"
+			)),
+			"TokenHandoffActivity no longer checks its caller through AddonGate.acceptsCaller, yet any app may start it"
 		);
 
 		assert!(
@@ -905,6 +911,44 @@ mod pins {
 			.map(str::trim)
 			.filter(|name| !name.is_empty())
 			.collect()
+	}
+
+	#[test]
+	fn add_ons_are_trusted_by_their_pinned_release_certificate_whoever_signed_this_build(
+	) {
+		assert!(
+			squashed(ADDON_LAUNCH_CHECK).contains(&squashed(
+				"certificates = packageManager.signingCertificates(),"
+			)) && !ADDON_LAUNCH_CHECK.contains("checkSignatures"),
+			"AddonLaunchCheck.kt no longer trusts an add-on by its pinned certificate, so a Play-signed build refuses every official add-on"
+		);
+		assert!(
+			spaced_match(
+				SIGNING_CERTIFICATES,
+				"hasSigningCertificate(packageName, sha256, PackageManager.CERT_INPUT_SHA256)"
+			)
+			.is_some(),
+			"PackageSigningCertificates.kt no longer answers AddonGate from PackageManager.hasSigningCertificate"
+		);
+		assert!(
+			spaced_match(
+				ADDON_GATE,
+				"private val releaseCertSha256: ByteArray = InstallGate.RELEASE_CERT_SHA256"
+			)
+			.is_some(),
+			"AddonGate.kt no longer pins the add-on signer to InstallGate.RELEASE_CERT_SHA256"
+		);
+		for (file, plugin, package) in [
+			("GoogleOauthPlugin.kt", SIGN_IN_PLUGIN, "COMPANION_PACKAGE"),
+			("RecaptchaPlugin.kt", RECAPTCHA_PLUGIN, "ADDON_PACKAGE"),
+		] {
+			assert!(
+				squashed(plugin).contains(&squashed(&format!(
+					"when (AddonLaunchCheck.decide(activity, intent, {package}))"
+				))),
+				"{file} no longer checks {package} through AddonLaunchCheck before sending it the request"
+			);
+		}
 	}
 
 	#[test]
