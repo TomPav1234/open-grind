@@ -194,7 +194,7 @@
 			class={["@container absolute top-0 left-0 size-full", contentClass]}
 		>
 			<div
-				class="absolute bottom-1/5 left-1/2 flex -translate-x-1/2 items-center gap-1 px-2 py-0.5 *:aspect-square *:w-[20cqw] *:rounded-full *:bg-card *:p-2"
+				class="absolute bottom-1/5 left-1/2 flex -translate-x-1/2 items-center gap-1 px-2 py-0.5 *:aspect-square *:w-[24cqw] *:rounded-full *:bg-card *:p-[6cqw]"
 			>
 				{#if message.hasPhoto}
 					<div>
