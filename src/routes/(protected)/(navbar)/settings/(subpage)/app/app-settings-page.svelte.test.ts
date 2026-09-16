@@ -14,15 +14,18 @@ import {
 import { toastsFake, updateApiFake } from "$lib/updates/updates-test-helpers";
 import type { Capability } from "$lib/updates/types";
 
+const PRIVACY_POLICY = "https://opengrind.org/privacy";
+
 const fake = updateApiFake();
 const toasts = toastsFake();
-const { updateSettings, platform } = vi.hoisted(() => ({
+const { updateSettings, platform, linkOpener } = vi.hoisted(() => ({
 	updateSettings: {
 		getUpdateCapability: vi.fn<() => Promise<Capability>>(),
 		getUpdateSettings: vi.fn(),
 		setAutomaticUpdateChecks: vi.fn(),
 	},
 	platform: { isAndroidPlatform: vi.fn(() => true) },
+	linkOpener: { openExternalLink: vi.fn() },
 }));
 
 vi.mock("$lib/app-data", () => ({
@@ -43,6 +46,7 @@ vi.mock("$lib/platform/os", async (importOriginal) => ({
 	...(await importOriginal<typeof import("$lib/platform/os")>()),
 	...platform,
 }));
+vi.mock("$lib/platform/link-opener", () => linkOpener);
 
 let testing: typeof import("@testing-library/svelte");
 
@@ -57,26 +61,24 @@ async function opened(capability: Capability) {
 	return testing.screen;
 }
 
+beforeAll(async () => {
+	await import("@testing-library/svelte");
+	await import("./+page.svelte");
+}, 90_000);
+
+beforeEach(() => {
+	vi.resetModules();
+	vi.clearAllMocks();
+	fake.reset();
+	platform.isAndroidPlatform.mockReturnValue(true);
+	updateSettings.getUpdateSettings.mockResolvedValue({ autoCheck: false });
+});
+
+afterEach(() => {
+	testing.cleanup();
+});
+
 describe("the Updates section of the app settings on Android", () => {
-	beforeAll(async () => {
-		await import("@testing-library/svelte");
-		await import("./+page.svelte");
-	}, 90_000);
-
-	beforeEach(() => {
-		vi.resetModules();
-		vi.clearAllMocks();
-		fake.reset();
-		platform.isAndroidPlatform.mockReturnValue(true);
-		updateSettings.getUpdateSettings.mockResolvedValue({
-			autoCheck: false,
-		});
-	});
-
-	afterEach(() => {
-		testing.cleanup();
-	});
-
 	it("offers Google OAuth app updates on a store build signed by Open Grind", async () => {
 		const screen = await opened({
 			state: "unsupported",
@@ -110,5 +112,28 @@ describe("the Updates section of the app settings on Android", () => {
 		).toBeNull();
 		expect(screen.queryByText(/updates automatically/)).toBeNull();
 		expect(updateSettings.getUpdateSettings).not.toHaveBeenCalled();
+	}, 60_000);
+});
+
+describe("the About section of the app settings", () => {
+	it("lists the privacy policy right before the credits and opens it in the system browser", async () => {
+		const screen = await opened({
+			state: "unsupported",
+			detail: { reason: "foreignSigner" },
+		});
+
+		const privacyPolicy = screen.getByRole("link", {
+			name: "Privacy policy",
+		});
+		expect(privacyPolicy.nextElementSibling).toBe(
+			screen.getByRole("link", { name: "Credits & Licenses" }),
+		);
+		expect(privacyPolicy.getAttribute("href")).toBe(PRIVACY_POLICY);
+
+		privacyPolicy.click();
+
+		expect(linkOpener.openExternalLink).toHaveBeenCalledExactlyOnceWith(
+			PRIVACY_POLICY,
+		);
 	}, 60_000);
 });

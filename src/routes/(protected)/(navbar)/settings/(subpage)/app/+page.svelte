@@ -1,9 +1,14 @@
 <script lang="ts">
-	import { CaretRightIcon } from "phosphor-svelte";
+	import {
+		ArrowSquareOutIcon,
+		CaretRightIcon,
+		type IconComponentProps,
+	} from "phosphor-svelte";
 	import { toast } from "svelte-sonner";
 
 	import ToastUnimplemented from "$lib/components/feedback/ToastUnimplemented.svelte";
 	import * as Item from "$lib/components/ui/item";
+	import Link from "$lib/components/ui/link/Link.svelte";
 	import { hapticsAvailable } from "$lib/haptics";
 	import { desktopEntryAvailable } from "$lib/platform/desktop-entry.svelte";
 	import { addonInstallerAvailable } from "$lib/updates/addon.svelte";
@@ -18,6 +23,22 @@
 	import UnitsSetting from "./UnitsSetting.svelte";
 </script>
 
+{#snippet rowContent({
+	title,
+	trailingIcon: TrailingIcon = CaretRightIcon,
+}: {
+	title: string;
+	trailingIcon?: import("svelte").Component<IconComponentProps>;
+})}
+	<Item.Content class="max-cramped:min-w-0">
+		<Item.Title class="inline-block max-w-full min-w-0 truncate">
+			{title}
+		</Item.Title>
+	</Item.Content>
+	<Item.Actions class="min-w-0">
+		<TrailingIcon class="size-4 shrink-0" />
+	</Item.Actions>
+{/snippet}
 {#snippet item({
 	title,
 	unimplemented,
@@ -37,16 +58,7 @@
 					});
 				}}
 			>
-				<Item.Content class="max-cramped:min-w-0">
-					<Item.Title
-						class="inline-block max-w-full min-w-0 truncate"
-					>
-						{title}
-					</Item.Title>
-				</Item.Content>
-				<Item.Actions class="min-w-0">
-					<CaretRightIcon class="size-4 shrink-0" />
-				</Item.Actions>
+				{@render rowContent({ title })}
 			</a>
 		{/snippet}
 	</Item.Root>
@@ -97,15 +109,18 @@
 <h2>About</h2>
 <Item.Root variant="outline">
 	{#snippet child({ props })}
+		<Link href="https://opengrind.org/privacy" {...props}>
+			{@render rowContent({
+				title: "Privacy policy",
+				trailingIcon: ArrowSquareOutIcon,
+			})}
+		</Link>
+	{/snippet}
+</Item.Root>
+<Item.Root variant="outline">
+	{#snippet child({ props })}
 		<a href="/settings/app/credits" {...props}>
-			<Item.Content class="max-cramped:min-w-0">
-				<Item.Title class="inline-block max-w-full min-w-0 truncate">
-					Credits &amp; Licenses
-				</Item.Title>
-			</Item.Content>
-			<Item.Actions class="min-w-0">
-				<CaretRightIcon class="size-4 shrink-0" />
-			</Item.Actions>
+			{@render rowContent({ title: "Credits & Licenses" })}
 		</a>
 	{/snippet}
 </Item.Root>
