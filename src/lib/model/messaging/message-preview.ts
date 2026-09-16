@@ -64,7 +64,7 @@ export function previewLabel(
 	const text = preview.text ?? null;
 	if (text !== null) return text;
 	if ((preview.albumId ?? null) !== null) return "Album";
-	if (preview.type === "ExpiringImage") return "Expiring photo";
+	if (preview.type === "ExpiringImage") return "Expiring image";
 	if ((preview.imageHash ?? null) !== null || preview.type === "Image") {
 		return "Photo";
 	}

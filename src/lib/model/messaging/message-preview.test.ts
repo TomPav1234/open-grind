@@ -110,7 +110,7 @@ describe("previewFromMessage", () => {
 			albumId: null,
 			imageHash: null,
 		});
-		expect(previewLabel(preview)).toBe("Expiring photo");
+		expect(previewLabel(preview)).toBe("Expiring image");
 	});
 });
 
@@ -138,8 +138,8 @@ describe("quoteLabel", () => {
 	});
 
 	it("defers to the inbox wording for a type the preview already names", () => {
-		expect(previewLabel(preview("ExpiringImage"))).toBe("Expiring photo");
-		expect(quoteLabel(preview("ExpiringImage"))).toBe("Expiring photo");
+		expect(previewLabel(preview("ExpiringImage"))).toBe("Expiring image");
+		expect(quoteLabel(preview("ExpiringImage"))).toBe("Expiring image");
 	});
 
 	it("does not render an empty pill for a blank text message", () => {
