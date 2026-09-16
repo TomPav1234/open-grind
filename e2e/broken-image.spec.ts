@@ -9,7 +9,7 @@ import {
 } from "./support/media";
 
 const BROKEN = '[data-slot="broken-media"]';
-const IMAGE_CONVERSATION = "/chat/100006:123456000";
+const IMAGE_CONVERSATION = "/chat/100002:123456000";
 const FIRST_LOAD_TIMEOUT = 120_000;
 
 test.describe("broken images", () => {

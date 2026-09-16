@@ -181,7 +181,7 @@ test("the distance drawer applies its slider value and lights the pill", async (
 
 	await expect
 		.poll(() => listedConversations(page))
-		.toEqual([HENRY, THEO, JAMES, BEAR]);
+		.toEqual([THEO, JAMES, BEAR]);
 	await expect(page.locator(`a[href="${JAMES}"]`).first()).toContainText(
 		"James",
 	);

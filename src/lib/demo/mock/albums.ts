@@ -1,15 +1,27 @@
 import { DAY, demoMeProfileId, NOW } from "../config";
-import { picsum } from "./avatars";
+import { picsum, unsplash } from "./avatars";
 
 function localDateTime(timestamp: number): string {
 	return new Date(timestamp).toISOString().slice(0, 19);
 }
 
+const UNSPLASH_COVER_BLUR = 30;
+const UNSPLASH_ALBUM_COVERS = new Map([[5004, "1645973342475-e9fcd3fc0d39"]]);
+
 export function albumCoverUrl(albumId: number): string {
+	const photo = UNSPLASH_ALBUM_COVERS.get(albumId);
+	if (photo) {
+		return unsplash({
+			photo,
+			width: 300,
+			height: 400,
+			blur: UNSPLASH_COVER_BLUR,
+		});
+	}
 	return picsum({ seed: `album-${albumId}-cover`, width: 300, height: 400 });
 }
 
-const ALBUM_WITH_VIDEO = 5001;
+const ALBUMS_WITH_VIDEO = new Set([5001, 5004]);
 
 export function demoAlbumContent(albumId: number) {
 	const count = 3 + (albumId % 3);
@@ -19,7 +31,7 @@ export function demoAlbumContent(albumId: number) {
 			width: 300,
 			height: 400,
 		});
-		const video = albumId === ALBUM_WITH_VIDEO && i === count - 1;
+		const video = ALBUMS_WITH_VIDEO.has(albumId) && i === count - 1;
 		return {
 			contentId: albumId * 100 + i,
 			contentType: video ? "video/mp4" : "image/jpeg",
