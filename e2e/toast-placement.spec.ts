@@ -83,11 +83,11 @@ async function expectToastGapAbove(obstruction: Locator): Promise<void> {
 	);
 }
 
-test.describe("a toast rests 8px above the bottom chrome", () => {
-	test.beforeEach(async ({ page }) => {
-		await installTauriShim(page);
-	});
+test.beforeEach(async ({ page }) => {
+	await installTauriShim(page);
+});
 
+test.describe("a toast rests 8px above the bottom chrome", () => {
 	test("on the browse grid", async ({ page }) => {
 		await page.goto("/");
 		await expectToastGapAbove(navBarAvatar(page));
@@ -98,7 +98,9 @@ test.describe("a toast rests 8px above the bottom chrome", () => {
 		await expectToastGapAbove(navBarAvatar(page));
 	});
 
-	test("in a conversation on a phone", async ({ page }) => {
+	test("in a conversation on a phone after the nav bar leaves", async ({
+		page,
+	}) => {
 		await page.goto("/chat");
 		await navBarAvatar(page).waitFor({ timeout: 60_000 });
 		await page.locator(`a[href="${DEMO_CONVERSATION}"]`).first().click();
@@ -151,7 +153,6 @@ test.describe("a toast rests 8px above the bottom chrome", () => {
 test("the save confirmation stays put while the save bar flies away", async ({
 	page,
 }) => {
-	await installTauriShim(page);
 	await page.goto("/settings/profile");
 	await makeDirty(page);
 	await scrollSettingsToEnd(page);

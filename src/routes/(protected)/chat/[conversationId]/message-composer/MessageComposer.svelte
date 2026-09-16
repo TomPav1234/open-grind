@@ -96,7 +96,7 @@
 	data-slot="message-composer"
 	class="absolute bottom-0 z-20 flex min-h-9.5 w-full min-w-0 shrink-0 flex-col gap-1 px-2 pb-2"
 	bind:clientHeight={height}
-	{@attach mobile.current ? bottomChrome : undefined}
+	{@attach mobile.current && bottomChrome}
 	oninput={remeasureBeforeResizeObserverCatchesUp}
 	onsubmit={(event) => {
 		event.preventDefault();
