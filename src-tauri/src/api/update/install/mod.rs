@@ -148,6 +148,9 @@ mod pins {
 	const MANIFEST: &str = include_str!(
 		"../../../../gen/android/app/src/main/AndroidManifest.xml"
 	);
+	const PLAY_OVERLAY: &str = include_str!(
+		"../../../../gen/android/app/src/play/AndroidManifest.xml"
+	);
 
 	fn hex64(line: &str) -> bool {
 		line.len() == 64 && line.chars().all(|c| c.is_ascii_hexdigit())
@@ -230,6 +233,28 @@ mod pins {
 				panic!("android.rs {name} has no closing brace")
 			});
 		&ANDROID_BRIDGE[start..start + length]
+	}
+
+	fn xml_elements(source: &str) -> impl Iterator<Item = (&str, &str)> {
+		source.match_indices('<').filter_map(|(at, _)| {
+			let end = source[at..].find('>').map_or(source.len(), |i| at + i);
+			let element = &source[at + 1..end];
+			let tag = element
+				.split(|c: char| c.is_whitespace() || c == '/')
+				.next()?;
+			tag.starts_with(|c: char| c.is_ascii_alphabetic())
+				.then_some((tag, element))
+		})
+	}
+
+	fn xml_attribute<'a>(element: &'a str, name: &str) -> Option<&'a str> {
+		let assignment = format!("{name}=\"");
+		element.match_indices(&assignment).find_map(|(at, _)| {
+			let value = &element[at + assignment.len()..];
+			element[..at]
+				.ends_with(char::is_whitespace)
+				.then(|| value.split('"').next().unwrap_or_default())
+		})
 	}
 
 	fn manifest_element(tag: &str, name: &str) -> &'static str {
@@ -481,6 +506,18 @@ mod pins {
 				"targetSigner = InstallGate.TargetSigner.of(context.packageManager.checkSignatures(context.packageName, target)"
 			)),
 			"InstallProbe.verdictFor no longer maps a single checkSignatures result through TargetSigner.of"
+		);
+	}
+
+	#[test]
+	fn the_install_permission_is_probed_only_where_the_manifest_requests_it() {
+		assert!(
+			spaced_match(
+				PROBE,
+				"fun canInstallNow(context: Context): Boolean = infoOf(context, context.packageName, PackageManager.GET_PERMISSIONS)?.requestedPermissions?.contains(Manifest.permission.REQUEST_INSTALL_PACKAGES) == true && context.packageManager.canRequestPackageInstalls()"
+			)
+			.is_some(),
+			"InstallProbe.canInstallNow calls canRequestPackageInstalls without checking the manifest requests REQUEST_INSTALL_PACKAGES, and Android throws a SecurityException where it does not"
 		);
 	}
 
@@ -1158,6 +1195,67 @@ mod pins {
 			assert!(
 				element.contains("android:exported=\"false\""),
 				"{component} must not be exported"
+			);
+		}
+	}
+
+	#[test]
+	fn the_play_overlay_removes_the_updater_the_main_manifest_declares() {
+		use super::super::component::SELF_PACKAGE;
+
+		let qualified = |name: &str| match name.strip_prefix('.') {
+			Some(relative) => format!("{SELF_PACKAGE}.{relative}"),
+			None => name.to_owned(),
+		};
+		let declared = |source: &'static str| {
+			xml_elements(source).filter_map(move |(tag, element)| {
+				xml_attribute(element, "android:name")
+					.map(|name| (tag, qualified(name), element))
+			})
+		};
+		let removed: Vec<(&str, String)> = declared(PLAY_OVERLAY)
+			.filter(|(_, _, element)| {
+				xml_attribute(element, "tools:node") == Some("remove")
+			})
+			.map(|(tag, name, _)| (tag, name))
+			.collect();
+
+		for (tag, name) in &removed {
+			assert!(
+				declared(MANIFEST).any(|(main_tag, main_name, _)| {
+					main_tag == *tag && main_name == *name
+				}),
+				"the Play overlay removes <{tag}> {name}, which the main manifest does not declare, so whatever replaced it ships on Play"
+			);
+		}
+		assert!(
+			removed.contains(&(
+				"uses-permission",
+				"android.permission.REQUEST_INSTALL_PACKAGES".to_owned()
+			)),
+			"the Play overlay no longer removes REQUEST_INSTALL_PACKAGES"
+		);
+
+		let update_package = PLUGIN
+			.lines()
+			.find_map(|line| line.strip_prefix("package "))
+			.expect("UpdatePlugin.kt declares no package")
+			.trim();
+		let updater: Vec<(&str, String)> = declared(MANIFEST)
+			.filter(|(tag, name, _)| {
+				["activity", "service", "receiver", "provider"].contains(tag)
+					&& name.starts_with(&format!("{update_package}."))
+			})
+			.map(|(tag, name, _)| (tag, name))
+			.collect();
+		assert!(
+			!updater.is_empty(),
+			"the main manifest declares no component from {update_package}"
+		);
+		for (tag, name) in updater {
+			assert!(
+				removed.contains(&(tag, name.clone())),
+				"the Play overlay keeps the updater's <{tag}> {name}"
 			);
 		}
 	}
