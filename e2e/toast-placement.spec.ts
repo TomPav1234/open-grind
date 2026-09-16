@@ -43,6 +43,16 @@ async function makeDirty(page: Page): Promise<void> {
 	await saveBarShown;
 }
 
+async function scrollSettingsToEnd(page: Page): Promise<void> {
+	await page.locator('[data-slot="settings-scroller"]').evaluate(
+		(scroller) =>
+			new Promise((settled) => {
+				scroller.scrollTop = scroller.scrollHeight;
+				requestAnimationFrame(() => requestAnimationFrame(settled));
+			}),
+	);
+}
+
 async function bottomToasterOffset(page: Page): Promise<string> {
 	return page
 		.locator('[data-sonner-toaster][data-y-position="bottom"]')
@@ -131,13 +141,7 @@ test.describe("a toast rests 8px above the bottom chrome", () => {
 		await expectToastGapAbove(save);
 
 		const stuck = await save.boundingBox();
-		await page.locator('[data-slot="settings-scroller"]').evaluate(
-			(scroller) =>
-				new Promise((settled) => {
-					scroller.scrollTop = scroller.scrollHeight;
-					requestAnimationFrame(() => requestAnimationFrame(settled));
-				}),
-		);
+		await scrollSettingsToEnd(page);
 		const unstuck = await save.boundingBox();
 		expect(unstuck?.y).toBeLessThan(stuck?.y ?? 0);
 		await expectToastGapAbove(save);
@@ -150,14 +154,35 @@ test("the save confirmation stays put while the save bar flies away", async ({
 	await installTauriShim(page);
 	await page.goto("/settings/profile");
 	await makeDirty(page);
+	await scrollSettingsToEnd(page);
+	const scrolledMidFlight = page.evaluate(async () => {
+		const nextFrame = () =>
+			new Promise((framed) => requestAnimationFrame(framed));
+		const saveBar = await new Promise<EventTarget | null>((leaving) =>
+			document.addEventListener(
+				"outrostart",
+				({ target }) => leaving(target),
+				{ capture: true, once: true },
+			),
+		);
+		await nextFrame();
+		document
+			.querySelector('[data-slot="settings-scroller"]')
+			?.dispatchEvent(new Event("scroll"));
+		await nextFrame();
+		const toaster = document.querySelector(
+			'[data-sonner-toaster][data-y-position="bottom"]',
+		);
+		return {
+			bottom: toaster && getComputedStyle(toaster).bottom,
+			saveBarFlying: saveBar instanceof Element && saveBar.isConnected,
+		};
+	});
 	await saveButton(page).click();
 
-	const confirmation = page.locator("[data-sonner-toast]", {
-		hasText: "Profile updated",
-	});
-	await expect(confirmation).toHaveAttribute("data-mounted", "true");
-	const shownAt = await bottomToasterOffset(page);
+	const { bottom, saveBarFlying } = await scrolledMidFlight;
+	expect(saveBarFlying).toBe(true);
 	await expect(saveButton(page)).toHaveCount(0);
-
-	expect(await bottomToasterOffset(page)).toBe(shownAt);
+	expect(await bottomToasterOffset(page)).toBe(bottom);
+	await expectToastGapAbove(navBarAvatar(page));
 });

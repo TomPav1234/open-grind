@@ -14,7 +14,7 @@ export function remeasureBottomChrome(): void {
 
 export const bottomChrome: Attachment<HTMLElement> = (element) => {
 	const measure = () => {
-		if (element.getClientRects().length === 0) {
+		if (element.inert || element.getClientRects().length === 0) {
 			clearances.delete(element);
 			return;
 		}
@@ -23,9 +23,6 @@ export const bottomChrome: Attachment<HTMLElement> = (element) => {
 			parseFloat(getComputedStyle(element).paddingTop);
 		clearances.set(element, window.innerHeight - contentTop);
 	};
-	const release = () => {
-		clearances.delete(element);
-	};
 	const movesWithItsScroller =
 		getComputedStyle(element).position === "sticky";
 	const observer = new ResizeObserver(measure);
@@ -33,7 +30,7 @@ export const bottomChrome: Attachment<HTMLElement> = (element) => {
 	measurers.add(measure);
 	window.addEventListener("resize", measure);
 	element.addEventListener("introend", measure);
-	element.addEventListener("outrostart", release);
+	element.addEventListener("outrostart", measure);
 	if (movesWithItsScroller)
 		window.addEventListener("scroll", measure, {
 			capture: true,
@@ -44,8 +41,8 @@ export const bottomChrome: Attachment<HTMLElement> = (element) => {
 		measurers.delete(measure);
 		window.removeEventListener("resize", measure);
 		element.removeEventListener("introend", measure);
-		element.removeEventListener("outrostart", release);
+		element.removeEventListener("outrostart", measure);
 		window.removeEventListener("scroll", measure, { capture: true });
-		release();
+		clearances.delete(element);
 	};
 };
