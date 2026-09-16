@@ -4,7 +4,6 @@
 
 	import "../layout.css";
 	import { beforeNavigate } from "$app/navigation";
-	import { page } from "$app/state";
 	import { IconContext } from "phosphor-svelte";
 	import { onMount } from "svelte";
 	import { Toaster } from "svelte-sonner";
@@ -29,6 +28,7 @@
 	import { startAddonUpdateWatch } from "$lib/updates/addon.svelte";
 	import { updatesSelfManaged } from "$lib/updates/capability.svelte";
 	import { startUpdateWatch } from "$lib/updates/updates-manager";
+	import { bottomChromeClearance } from "$lib/util/bottom-chrome.svelte";
 
 	onMount(() => {
 		installScrollGestureBridge();
@@ -104,14 +104,9 @@
 		};
 	});
 
-	const hasBottomNavBar = $derived(
-		page.route.id?.startsWith("/(protected)/(navbar)") ?? false,
-	);
 	const toastOffset = $derived({
 		top: "calc(var(--safe-area-top) + 0.5rem)",
-		bottom: hasBottomNavBar
-			? "calc(var(--content-pb) + 0.5rem)"
-			: "calc(var(--safe-area-bottom) + 0.5rem)",
+		bottom: `calc(max(var(--safe-area-bottom), ${bottomChromeClearance()}px) + 0.5rem)`,
 	});
 </script>
 

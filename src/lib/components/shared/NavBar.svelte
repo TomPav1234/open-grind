@@ -14,6 +14,7 @@
 	import { Badge } from "$lib/components/ui/badge";
 	import { tabsListVariants } from "$lib/components/ui/tabs";
 	import { getTapsState } from "$lib/interest/taps-state.svelte";
+	import { bottomChrome } from "$lib/util/bottom-chrome.svelte";
 
 	let { ourProfileId }: { ourProfileId: number } = $props();
 
@@ -36,6 +37,7 @@
 	class="fixed bottom-0 z-50 w-full pt-2 pb-fixed-nav"
 	bgClass="bg-linear-to-t from-background to-transparent"
 	contentClass="overflow-auto no-scrollbar left-1/2 -translate-x-1/2 m-auto flex justify-center gap-2 px-1"
+	{@attach bottomChrome}
 >
 	<div
 		class={[

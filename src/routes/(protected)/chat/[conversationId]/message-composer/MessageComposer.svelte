@@ -5,6 +5,8 @@
 	import { getConversations } from "$lib/chat/conversations-context.svelte";
 	import { draftFromMessage } from "$lib/model/messaging/messages";
 	import { dismissOnBackGesture } from "$lib/platform/back-gesture-event.svelte";
+	import { bottomChrome } from "$lib/util/bottom-chrome.svelte";
+	import { below } from "$lib/util/breakpoints.svelte";
 	import type {
 		ApiResponseMessage,
 		MessageDraft,
@@ -33,6 +35,7 @@
 	} = $props();
 
 	const { drafts } = getConversations();
+	const mobile = below("split");
 
 	let textContent = $state(untrack(() => drafts.get(conversationId)));
 	let form: HTMLFormElement | null = $state(null);
@@ -90,8 +93,10 @@
 
 <form
 	bind:this={form}
+	data-slot="message-composer"
 	class="absolute bottom-0 z-20 flex min-h-9.5 w-full min-w-0 shrink-0 flex-col gap-1 px-2 pb-2"
 	bind:clientHeight={height}
+	{@attach mobile.current ? bottomChrome : undefined}
 	oninput={remeasureBeforeResizeObserverCatchesUp}
 	onsubmit={(event) => {
 		event.preventDefault();

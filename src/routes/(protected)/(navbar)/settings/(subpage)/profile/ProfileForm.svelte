@@ -23,6 +23,7 @@
 	import { WheelPicker } from "$lib/components/ui/carousel";
 	import { Spinner } from "$lib/components/ui/spinner";
 	import { type Profile } from "$lib/model/users/profiles";
+	import { bottomChrome } from "$lib/util/bottom-chrome.svelte";
 	import { deepEqual } from "$lib/util/deep-equal";
 	import type { Gender } from "$lib/model/users/genders";
 	import type { Pronoun } from "$lib/model/users/pronouns";
@@ -382,6 +383,7 @@
 		<div
 			class="sticky bottom-(--content-pb) z-10 -mx-4 px-4 py-3"
 			transition:fly={{ y: 80, duration: 300, easing: expoOut }}
+			{@attach bottomChrome}
 		>
 			<Button
 				type="submit"
