@@ -26,9 +26,7 @@ const saveButton = (page: Page) =>
 	page.getByRole("button", { name: "Save changes" });
 
 async function makeDirty(page: Page): Promise<void> {
-	const displayName = page.getByRole("textbox", {
-		name: "Everyone will see this on the grid...",
-	});
+	const displayName = page.getByRole("textbox", { name: "Display name" });
 	await displayName.waitFor({ timeout: 60_000 });
 	const saveBarShown = page.evaluate(
 		() =>

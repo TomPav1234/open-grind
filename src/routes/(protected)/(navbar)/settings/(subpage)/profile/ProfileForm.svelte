@@ -261,13 +261,16 @@
 		<section class="flex flex-col gap-3">
 			<h2>Stats</h2>
 			<Field label="Age">
-				<WheelPicker
-					bind:value={form.age}
-					min={ageRange.min}
-					max={ageRange.max}
-					label="years"
-					disabled={saving}
-				/>
+				{#snippet picker({ labelId })}
+					<WheelPicker
+						bind:value={form.age}
+						min={ageRange.min}
+						max={ageRange.max}
+						unit="years"
+						disabled={saving}
+						aria-labelledby={labelId}
+					/>
+				{/snippet}
 			</Field>
 			<SwitchRow label="Show my age" bind:checked={form.showAge} />
 			<SelectField
