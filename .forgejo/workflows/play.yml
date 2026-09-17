@@ -23,7 +23,7 @@ jobs:
       fail-fast: false
       matrix:
         provider: ["cherry", "vultr", "hetzner"]
-    runs-on: ["build", "${{ matrix.provider }}"]
+    runs-on: ["debian", "8c16g", "${{ matrix.provider }}"]
     timeout-minutes: 55
     env:
       BUILD_ROOT: /work-play
@@ -86,7 +86,7 @@ jobs:
 
   compare:
     needs: build
-    runs-on: ["verify", "hetzner"]
+    runs-on: ["toolchain", "4c8g", "hetzner"]
     timeout-minutes: 10
     steps:
       - name: Checkout
