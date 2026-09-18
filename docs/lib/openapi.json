@@ -2,7 +2,7 @@
 	"openapi": "3.0.3",
 	"info": {
 		"title": "Grindr API",
-		"version": "26.16.1.178666 (2026-09-11)"
+		"version": "26.16.1.179451 (2026-09-13)"
 	},
 	"servers": [
 		{
