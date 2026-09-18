@@ -181,7 +181,7 @@ pub fn run() {
             api::recaptcha::mint_recaptcha_token,
             storage::storage_backend,
             api::rest::request,
-            api::media_upload::upload_chat_media,
+            api::media_upload::upload_media,
             api::ws::ws_connect,
             api::ws::ws_reconnect,
             api::ws::ws_send,

@@ -1,5 +1,5 @@
+import { encode } from "@msgpack/msgpack";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import z from "zod";
 
 const { fetchRestMock, invokeMock, readMediaBytesMock } = vi.hoisted(() => ({
 	fetchRestMock: vi.fn(),
@@ -20,7 +20,9 @@ vi.mock("$lib/platform/media-picker", async (importOriginal) => ({
 	readMediaBytes: readMediaBytesMock,
 }));
 
+import { ApiError } from "$lib/api/api-error";
 import { addMediaToDrawer } from "$lib/api/messaging/chat-media";
+import { toBase64 } from "$lib/util/base64";
 import type { PickedMedia } from "$lib/platform/media-picker";
 
 const pickedMedia = {
@@ -31,6 +33,17 @@ const pickedMedia = {
 } satisfies PickedMedia;
 
 const uploadedUrl = "https://cdns.grindr.com/images/chat/photo.jpg";
+
+const uploadPath = "/v5/chat/media/upload?takenOnGrindr=false";
+
+function uploadResponse({ status, body }: { status: number; body: unknown }) {
+	return toBase64(
+		encode({
+			status,
+			body: new TextEncoder().encode(JSON.stringify(body)),
+		}),
+	);
+}
 
 const assertOk = vi.fn();
 
@@ -50,11 +63,16 @@ describe("addMediaToDrawer", () => {
 	it("uploads the selected bytes, saves the upload to the drawer, and returns the drawer item", async () => {
 		vi.spyOn(Date, "now").mockReturnValue(1_720_000_000_000);
 		readMediaBytesMock.mockResolvedValue(new Uint8Array([1, 2, 3]));
-		invokeMock.mockResolvedValue({
-			mediaId: 910_001,
-			url: uploadedUrl,
-			mediaHash: "hash-1",
-		});
+		invokeMock.mockResolvedValue(
+			uploadResponse({
+				status: 200,
+				body: {
+					mediaId: 910_001,
+					url: uploadedUrl,
+					mediaHash: "hash-1",
+				},
+			}),
+		);
 
 		await expect(addMediaToDrawer(pickedMedia)).resolves.toEqual({
 			id: 910_001,
@@ -66,9 +84,10 @@ describe("addMediaToDrawer", () => {
 		});
 
 		expect(readMediaBytesMock).toHaveBeenCalledWith(pickedMedia);
-		expect(invokeMock).toHaveBeenCalledWith("upload_chat_media", {
+		expect(invokeMock).toHaveBeenCalledWith("upload_media", {
+			path: uploadPath,
+			signed: false,
 			contentType: "image/png",
-			takenOnGrindr: false,
 			data: "AQID",
 		});
 		expect(fetchRestMock).toHaveBeenCalledWith(
@@ -80,32 +99,64 @@ describe("addMediaToDrawer", () => {
 
 	it("falls back to JPEG when the picked media has no content type", async () => {
 		readMediaBytesMock.mockResolvedValue(new Uint8Array([4, 5, 6]));
-		invokeMock.mockResolvedValue({
-			mediaId: 910_002,
-			url: uploadedUrl,
-			mediaHash: "hash-2",
-		});
+		invokeMock.mockResolvedValue(
+			uploadResponse({
+				status: 200,
+				body: {
+					mediaId: 910_002,
+					url: uploadedUrl,
+					mediaHash: "hash-2",
+				},
+			}),
+		);
 
 		await expect(
 			addMediaToDrawer({ ...pickedMedia, mimeType: null }),
 		).resolves.toMatchObject({ contentType: "image/jpeg" });
 
-		expect(invokeMock).toHaveBeenCalledWith("upload_chat_media", {
+		expect(invokeMock).toHaveBeenCalledWith("upload_media", {
+			path: uploadPath,
+			signed: false,
 			contentType: "image/jpeg",
-			takenOnGrindr: false,
 			data: "BAUG",
 		});
 	});
 
-	it("rejects an upload response with a malformed media id without touching the drawer", async () => {
+	it("rejects a failed upload status without touching the drawer", async () => {
 		readMediaBytesMock.mockResolvedValue(new Uint8Array([1]));
-		invokeMock.mockResolvedValue({
-			mediaId: "not-a-number",
-			url: uploadedUrl,
-			mediaHash: "hash-3",
-		});
+		invokeMock.mockResolvedValue(
+			uploadResponse({
+				status: 413,
+				body: { type: "urn:gr:err:payload_too_large" },
+			}),
+		);
 
-		await expect(addMediaToDrawer(pickedMedia)).rejects.toThrow(z.ZodError);
+		await expect(addMediaToDrawer(pickedMedia)).rejects.toThrow(
+			expect.objectContaining({
+				name: "ApiError",
+				request: { method: "POST", path: uploadPath },
+				response: expect.objectContaining({ status: 413 }),
+			}),
+		);
+
+		expect(fetchRestMock).not.toHaveBeenCalled();
+	});
+
+	it("rejects an upload response with a malformed media id without touching the drawer", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		readMediaBytesMock.mockResolvedValue(new Uint8Array([1]));
+		invokeMock.mockResolvedValue(
+			uploadResponse({
+				status: 200,
+				body: {
+					mediaId: "not-a-number",
+					url: uploadedUrl,
+					mediaHash: "hash-3",
+				},
+			}),
+		);
+
+		await expect(addMediaToDrawer(pickedMedia)).rejects.toThrow(ApiError);
 
 		expect(invokeMock).toHaveBeenCalledOnce();
 		expect(fetchRestMock).not.toHaveBeenCalled();
@@ -113,11 +164,16 @@ describe("addMediaToDrawer", () => {
 
 	it("propagates a failed drawer save instead of reporting the media as added", async () => {
 		readMediaBytesMock.mockResolvedValue(new Uint8Array([1, 2, 3]));
-		invokeMock.mockResolvedValue({
-			mediaId: 910_004,
-			url: uploadedUrl,
-			mediaHash: "hash-4",
-		});
+		invokeMock.mockResolvedValue(
+			uploadResponse({
+				status: 200,
+				body: {
+					mediaId: 910_004,
+					url: uploadedUrl,
+					mediaHash: "hash-4",
+				},
+			}),
+		);
 		assertOk.mockImplementation(() => {
 			throw new Error("status 500");
 		});

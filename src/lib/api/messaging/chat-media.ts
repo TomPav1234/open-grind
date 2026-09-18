@@ -1,6 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
 import z from "zod";
 
+import { invokeRest } from "$lib/api/transport";
 import { demoEnabled, demoUploadChatMedia } from "$lib/demo";
 import { mediaUrlSchema } from "$lib/model/media";
 import { type PickedMedia, readMediaBytes } from "$lib/platform/media-picker";
@@ -15,6 +15,12 @@ const mediaUploadResponseSchema = z.object({
 
 export type MediaUploadResponse = z.infer<typeof mediaUploadResponseSchema>;
 
+function chatMediaUploadPath(takenOnGrindr: boolean): string {
+	return takenOnGrindr
+		? "/v6/chat/media/upload?takenOnGrindr=true"
+		: "/v5/chat/media/upload?takenOnGrindr=false";
+}
+
 async function uploadChatMedia(
 	bytes: Uint8Array<ArrayBuffer>,
 	options: { contentType: string; takenOnGrindr: boolean },
@@ -22,12 +28,17 @@ async function uploadChatMedia(
 	if (demoEnabled) {
 		return demoUploadChatMedia({ bytes, contentType: options.contentType });
 	}
-	const response = await invoke("upload_chat_media", {
-		contentType: options.contentType,
-		takenOnGrindr: options.takenOnGrindr,
-		data: toBase64(bytes),
+	const path = chatMediaUploadPath(options.takenOnGrindr);
+	const response = await invokeRest("upload_media", {
+		args: {
+			path,
+			signed: options.takenOnGrindr,
+			contentType: options.contentType,
+			data: toBase64(bytes),
+		},
+		requestInfo: { method: "POST", path },
 	});
-	return mediaUploadResponseSchema.parse(response);
+	return response.jsonParsed(mediaUploadResponseSchema);
 }
 
 export async function addMediaToDrawer(
