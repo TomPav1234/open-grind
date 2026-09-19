@@ -5,6 +5,7 @@ import {
 	type AlbumContentResponse,
 	getAlbumContent,
 } from "$lib/api/messaging/albums";
+import type { SharedAlbumItem } from "$lib/model/messaging/albums";
 import { now } from "$lib/util/clock";
 import { proxyMediaUrl } from "$lib/util/media";
 import {
@@ -26,40 +27,121 @@ type LoadedAlbum = AlbumContentResponse & {
 const ALBUM_MEMO_TTL_MS = 10 * 60 * 1000;
 const cachedAlbums = new Map<number, { album: LoadedAlbum; time: number }>();
 
-export async function openAlbumLightbox(albumId: number): Promise<void> {
+export async function openAlbumLightbox(
+	albumId: number,
+	fallbackAlbum?: SharedAlbumItem | null,
+): Promise<void> {
 	try {
 		const cached = cachedAlbums.get(albumId);
-		let loaded: LoadedAlbum;
+		let loaded: LoadedAlbum | null = null;
 
 		if (cached && now() - cached.time < ALBUM_MEMO_TTL_MS) {
 			loaded = cached.album;
 		} else {
-			const album = await getAlbumContent(albumId);
-			loaded = {
-				...album,
-				content: await Promise.all(
-					album.content.map(async (slide) => {
-						const kind = slide.contentType.startsWith("video/")
-							? "video"
-							: "image";
-						const url = proxyMediaUrl(slide.url, { as: kind });
-						const coverUrl = proxyMediaUrl(slide.coverUrl);
-						const measurable = { video: coverUrl, image: url }[kind];
-						return {
-							...slide,
-							url,
-							coverUrl,
-							...(measurable === null
-								? await measureVideo(url)
-								: await measureImage(measurable)),
-						};
-					}),
-				),
-			};
-			cachedAlbums.set(albumId, { album: loaded, time: now() });
+			try {
+				const album = await getAlbumContent(albumId);
+				if (album && album.content && album.content.length > 0) {
+					loaded = {
+						...album,
+						content: await Promise.all(
+							album.content.map(async (slide) => {
+								const kind = slide.contentType.startsWith("video/")
+									? "video"
+									: "image";
+								const rawUrl = slide.url || slide.thumbUrl;
+								const url = proxyMediaUrl(rawUrl, { as: kind });
+								const coverUrl = proxyMediaUrl(slide.coverUrl);
+								const measurable = { video: coverUrl, image: url }[kind];
+								let dims: MediaDimensions = { width: 800, height: 1000 };
+								try {
+									dims =
+										measurable === null
+											? await measureVideo(url)
+											: await measureImage(measurable);
+								} catch {}
+								return {
+									...slide,
+									url,
+									coverUrl,
+									...dims,
+								};
+							}),
+						),
+					};
+					cachedAlbums.set(albumId, { album: loaded, time: now() });
+				}
+			} catch (e) {
+				console.warn(`Failed to fetch /v2/albums/${albumId}`, e);
+			}
 		}
 
-		if (loaded.content.length === 0) {
+		// If album has no content (e.g. old / expired album or 403 / paywalled past limit), check fallbackAlbum
+		if (!loaded || loaded.content.length === 0) {
+			const fallbackSlides: (AlbumContentResponse["content"][number] & MediaDimensions)[] = [];
+
+			if (fallbackAlbum?.paywallUrls && fallbackAlbum.paywallUrls.length > 0) {
+				for (let i = 0; i < fallbackAlbum.paywallUrls.length; i++) {
+					const rawUrl = fallbackAlbum.paywallUrls[i];
+					if (!rawUrl) continue;
+					const isVideo = rawUrl.includes(".mp4") || rawUrl.includes("/video");
+					const kind = isVideo ? "video" : "image";
+					const url = proxyMediaUrl(rawUrl, { as: kind });
+					let dims: MediaDimensions = { width: 800, height: 1000 };
+					try {
+						dims = isVideo ? await measureVideo(url) : await measureImage(url);
+					} catch {}
+					fallbackSlides.push({
+						contentId: i + 1,
+						contentType: isVideo ? "video/mp4" : "image/jpeg",
+						coverUrl: url,
+						thumbUrl: url,
+						url,
+						statusId: 1,
+						processing: false,
+						rejectionId: null,
+						...dims,
+					});
+				}
+			} else if (fallbackAlbum?.coverContent?.location) {
+				const rawUrl = fallbackAlbum.coverContent.location;
+				const isVideo =
+					(fallbackAlbum.videoCount ?? 0) > 0 &&
+					(fallbackAlbum.imageCount ?? 0) === 0;
+				const kind = isVideo ? "video" : "image";
+				const url = proxyMediaUrl(rawUrl, { as: kind });
+				let dims: MediaDimensions = { width: 800, height: 1000 };
+				try {
+					dims = isVideo ? await measureVideo(url) : await measureImage(url);
+				} catch {}
+				fallbackSlides.push({
+					contentId: 1,
+					contentType: isVideo ? "video/mp4" : "image/jpeg",
+					coverUrl: url,
+					thumbUrl: url,
+					url,
+					statusId: 1,
+					processing: false,
+					rejectionId: null,
+					...dims,
+				});
+			}
+
+			if (fallbackSlides.length > 0) {
+				loaded = {
+					albumId,
+					albumName: fallbackAlbum?.name ?? null,
+					profileId: fallbackAlbum?.profile?.profileId ?? 0,
+					albumViewable: true,
+					hasUnseenContent: false,
+					sharedCount: 0,
+					createdAt: new Date().toISOString(),
+					updatedAt: new Date().toISOString(),
+					content: fallbackSlides,
+				};
+			}
+		}
+
+		if (!loaded || loaded.content.length === 0) {
 			showErrorToast({ label: "L'album è vuoto" });
 			return;
 		}

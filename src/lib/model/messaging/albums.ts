@@ -129,6 +129,7 @@ export const sharedAlbumItemSchema = z.object({
 	hasUnseenContent: serverDefault({ value: z.boolean(), fallback: false }),
 	coverContent: pressieCoverContentSchema.nullish(),
 	profile: pressieProfileMiniSchema.nullish(),
+	paywallUrls: z.array(z.string()).nullish(),
 });
 
 export type SharedAlbumItem = z.infer<typeof sharedAlbumItemSchema>;

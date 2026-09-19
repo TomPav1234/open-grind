@@ -28,7 +28,7 @@
 		if (opening) return;
 		opening = true;
 		try {
-			await openAlbumLightbox(album.albumId);
+			await openAlbumLightbox(album.albumId, album);
 		} finally {
 			opening = false;
 		}

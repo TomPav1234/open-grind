@@ -102,11 +102,11 @@ export async function getReceivedAlbums(
 	const [feedResult, paywallResult] = await Promise.allSettled([
 		fetchRest("/v3/pressie-albums/feed", {
 			method: "POST",
-			body: filters ?? {},
+			body: { blur: false, ...(filters ?? {}) },
 		}).then((res) => res.jsonParsed(pressieAlbumsFeedResponseSchema)),
 		fetchRest("/v3/pressie-albums/feed/paywall/", {
 			method: "POST",
-			body: {},
+			body: { counterpartyId: null, blur: false },
 		}).then((res) => res.jsonParsed(pressieAlbumsPaywallResponseSchema)),
 	]);
 
@@ -123,7 +123,21 @@ export async function getReceivedAlbums(
 
 	// Add albums from paywall endpoint (bypassing free tier 5-album limit)
 	for (const item of paywall?.albumPaywallContent ?? []) {
-		if (!albumsMap.has(item.albumId)) {
+		const existing = albumsMap.get(item.albumId);
+		if (existing) {
+			existing.albumViewable = true;
+			if (item.paywallUrls && item.paywallUrls.length > 0) {
+				existing.paywallUrls = item.paywallUrls;
+			}
+			if (item.paywallCoverUrl && !existing.coverContent?.location) {
+				existing.coverContent = {
+					id: null,
+					contentType: "image/jpeg",
+					location: item.paywallCoverUrl,
+					status: "APPROVED",
+				};
+			}
+		} else {
 			albumsMap.set(item.albumId, {
 				albumId: item.albumId,
 				albumViewable: true,
@@ -135,13 +149,16 @@ export async function getReceivedAlbums(
 					item.albumsItemCount ?? item.paywallUrls?.length ?? 1,
 				videoCount: 0,
 				hasUnseenContent: false,
-				coverContent: {
-					id: null,
-					contentType: "image/jpeg",
-					location: item.paywallCoverUrl,
-					status: "APPROVED",
-				},
+				coverContent: item.paywallCoverUrl
+					? {
+							id: null,
+							contentType: "image/jpeg",
+							location: item.paywallCoverUrl,
+							status: "APPROVED",
+						}
+					: null,
 				profile: item.profile,
+				paywallUrls: item.paywallUrls ?? null,
 			});
 		}
 	}

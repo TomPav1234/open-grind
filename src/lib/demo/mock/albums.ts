@@ -5,7 +5,6 @@ function localDateTime(timestamp: number): string {
 	return new Date(timestamp).toISOString().slice(0, 19);
 }
 
-const UNSPLASH_COVER_BLUR = 30;
 const UNSPLASH_ALBUM_COVERS = new Map([[5004, "1645973342475-e9fcd3fc0d39"]]);
 
 export function albumCoverUrl(albumId: number): string {
@@ -13,12 +12,11 @@ export function albumCoverUrl(albumId: number): string {
 	if (photo) {
 		return unsplash({
 			photo,
-			width: 300,
-			height: 400,
-			blur: UNSPLASH_COVER_BLUR,
+			width: 600,
+			height: 800,
 		});
 	}
-	return picsum({ seed: `album-${albumId}-cover`, width: 300, height: 400 });
+	return picsum({ seed: `album-${albumId}-cover`, width: 600, height: 800 });
 }
 
 const ALBUMS_WITH_VIDEO = new Set([5001, 5004]);
