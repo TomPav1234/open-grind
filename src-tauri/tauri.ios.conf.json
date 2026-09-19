@@ -2,7 +2,6 @@
 	"$schema": "https://schema.tauri.app/config/2",
 	"bundle": {
 		"iOS": {
-			"developmentTeam": "1234567890",
 			"bundleVersion": "1.0.0",
 			"infoPlist": "Info.ios.plist"
 		}
