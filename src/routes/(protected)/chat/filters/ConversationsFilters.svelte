@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ImagesIcon, StarIcon } from "phosphor-svelte";
+	import { FilmSlateIcon, ImagesIcon, StarIcon } from "phosphor-svelte";
 
 	import QuickFilterButton from "$lib/components/filters/QuickFilterButton.svelte";
 	import ProgressiveBlur from "$lib/components/shared/ProgressiveBlur.svelte";
@@ -104,6 +104,14 @@
 	>
 		<ImagesIcon class="size-4" weight="bold" />
 		<span>Album</span>
+	</a>
+	<a
+		href="/media"
+		class={[buttonVariants({ variant: "secondary", size: "sm" }), "h-9 gap-1.5 shrink-0"]}
+		aria-label="Media Ricevuti"
+	>
+		<FilmSlateIcon class="size-4" weight="bold" />
+		<span>Media</span>
 	</a>
 </ProgressiveBlur>
 

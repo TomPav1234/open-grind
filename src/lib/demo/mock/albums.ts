@@ -179,3 +179,62 @@ export function demoReceivedAlbums() {
 		],
 	};
 }
+
+export function demoPaywalledAlbums() {
+	return {
+		albumPaywallContent: [
+			{
+				albumId: 902,
+				profile: {
+					profileId: 100003,
+					name: "Lorenzo",
+					profileUrl: null,
+					onlineUntil: Date.now() + 1200000,
+					distanceKm: 1.2,
+				},
+				paywallCoverUrl: albumCoverUrl(902),
+				paywallUrls: [albumCoverUrl(902)],
+				albumsItemCount: 5,
+			},
+			{
+				albumId: 903,
+				profile: {
+					profileId: 100004,
+					name: "Matteo",
+					profileUrl: null,
+					onlineUntil: Date.now() - 7200000,
+					distanceKm: 4.8,
+				},
+				paywallCoverUrl: albumCoverUrl(903),
+				paywallUrls: [albumCoverUrl(903)],
+				albumsItemCount: 8,
+			},
+			{
+				albumId: 904,
+				profile: {
+					profileId: 100005,
+					name: "Davide",
+					profileUrl: null,
+					onlineUntil: Date.now() + 300000,
+					distanceKm: 0.3,
+				},
+				paywallCoverUrl: albumCoverUrl(904),
+				paywallUrls: [albumCoverUrl(904)],
+				albumsItemCount: 3,
+			},
+			{
+				albumId: 905,
+				profile: {
+					profileId: 100006,
+					name: "Andrea",
+					profileUrl: null,
+					onlineUntil: Date.now() - 1800000,
+					distanceKm: 3.1,
+				},
+				paywallCoverUrl: albumCoverUrl(905),
+				paywallUrls: [albumCoverUrl(905)],
+				albumsItemCount: 12,
+			},
+		],
+	};
+}

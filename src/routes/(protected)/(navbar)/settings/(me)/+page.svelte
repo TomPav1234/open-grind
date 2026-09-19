@@ -5,6 +5,7 @@
 	import AppSettingsLink from "./AppSettingsLink.svelte";
 	import ProfileLink from "./ProfileLink.svelte";
 	import ReceivedAlbumsLink from "./ReceivedAlbumsLink.svelte";
+	import ReceivedMediaLink from "./ReceivedMediaLink.svelte";
 	import SignOutButton from "./SignOutButton.svelte";
 	import Socials from "./Socials.svelte";
 
@@ -18,6 +19,7 @@
 				<ProfileLink id={data.ourProfileId} />
 				<span role="separator"></span>
 				<ReceivedAlbumsLink />
+				<ReceivedMediaLink />
 				<AccountSettingsLink />
 				<AppSettingsLink />
 				<SignOutButton />

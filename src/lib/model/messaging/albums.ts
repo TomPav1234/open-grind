@@ -146,3 +146,24 @@ export const pressieAlbumsFeedResponseSchema = z.object({
 export type PressieAlbumsFeedResponse = z.infer<
 	typeof pressieAlbumsFeedResponseSchema
 >;
+
+export const albumPaywallItemSchema = z.object({
+	albumId: z.int(),
+	profile: pressieProfileMiniSchema.nullish(),
+	paywallCoverUrl: z.string().nullish(),
+	paywallUrls: z.array(z.string()).nullish(),
+	albumsItemCount: z.int().nullish(),
+});
+
+export type AlbumPaywallItem = z.infer<typeof albumPaywallItemSchema>;
+
+export const pressieAlbumsPaywallResponseSchema = z.object({
+	albumPaywallContent: serverDefault({
+		value: z.array(albumPaywallItemSchema),
+		fallback: [],
+	}),
+});
+
+export type PressieAlbumsPaywallResponse = z.infer<
+	typeof pressieAlbumsPaywallResponseSchema
+>;

@@ -15,6 +15,7 @@ import {
 	demoAlbumContent,
 	demoAlbumShares,
 	demoMyAlbums,
+	demoPaywalledAlbums,
 	demoReceivedAlbums,
 	demoShareAlbum,
 	demoUnshareAlbum,
@@ -254,6 +255,13 @@ export function demoRoute({
 	}
 	if (
 		method === "POST" &&
+		(rawPath === "/v3/pressie-albums/feed/paywall/" ||
+			rawPath === "/v3/pressie-albums/feed/paywall")
+	) {
+		return ok(demoPaywalledAlbums());
+	}
+	if (
+		method === "POST" &&
 		segments[0] === "v4" &&
 		segments[1] === "albums" &&
 		segments[3] === "shares" &&
@@ -333,7 +341,11 @@ export function demoRoute({
 		demoDeleteConversation(conversationId);
 		return ok({});
 	}
-	if (method === "GET" && rawPath.startsWith("/v4/chat/media/drawer/")) {
+	if (
+		method === "GET" &&
+		(rawPath === "/v4/chat/media/drawer" ||
+			rawPath.startsWith("/v4/chat/media/drawer/"))
+	) {
 		return ok(demoDrawerMedia());
 	}
 	if (method === "GET" && rawPath === "/v3/places/search") {

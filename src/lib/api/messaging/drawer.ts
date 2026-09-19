@@ -21,6 +21,12 @@ export async function getDrawerMedia(conversationId: string) {
 	);
 }
 
+export async function getAllDrawerMedia() {
+	return await fetchRest("/v4/chat/media/drawer").then(
+		(res) => res.jsonParsed(z.array(drawerMediaSchema)),
+	);
+}
+
 export async function saveMediaToDrawer(mediaId: number): Promise<void> {
 	await fetchRest(`/v4/chat/media/drawer/${mediaId}`, { method: "PUT" }).then(
 		(res) => res.assertOk(),
