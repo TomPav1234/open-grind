@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Open Grind</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Open Grind uses your location to discover and display nearby profiles on the grid.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Open Grind requires camera access to take profile photos and send chat media.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Open Grind requires access to your photo library to select photos for your profile and messages.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>UIRequiresFullScreen</key>
+	<true/>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
+</dict>
+</plist>
