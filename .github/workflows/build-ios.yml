@@ -21,7 +21,7 @@ on:
 
 jobs:
   build-ios:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 60
     env:
       CI: "true"
@@ -39,7 +39,11 @@ jobs:
 
       - name: Select Xcode Developer Directory
         run: |
-          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          XCODE_PATH=$(find /Applications -maxdepth 1 -name "Xcode_16*.app" -o -name "Xcode.app" 2>/dev/null | sort -V | tail -n 1)
+          if [ -n "$XCODE_PATH" ] && [ -d "$XCODE_PATH" ]; then
+            echo "Selecting Xcode from: $XCODE_PATH"
+            sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          fi
           xcodebuild -version
           pod --version
 
@@ -86,6 +90,10 @@ jobs:
       - name: Initialize Tauri iOS project
         run: |
           bun run tauri ios init --ci || bun run tauri ios init
+
+      - name: Adjust Xcode Project Compatibility
+        run: |
+          find src-tauri/gen/apple -name "project.pbxproj" -exec sed -i '' 's/objectVersion = 77;/objectVersion = 60;/g' {} + || true
 
       - name: Build iOS App and Package IPA
         run: |
