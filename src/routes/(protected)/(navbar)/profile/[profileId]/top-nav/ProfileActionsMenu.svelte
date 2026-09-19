@@ -17,10 +17,15 @@
 
 	let {
 		profileId,
+		blockable,
 		onBlocked,
 		onHidden,
-	}: { profileId: number; onBlocked: () => void; onHidden: () => void } =
-		$props();
+	}: {
+		profileId: number;
+		blockable: boolean;
+		onBlocked: () => void;
+		onHidden: () => void;
+	} = $props();
 
 	let submitting = $state(false);
 	let reportOpen = $state(false);
@@ -79,21 +84,26 @@
 			<EyeSlashIcon class="size-5" />
 			Hide profile
 		</DropdownMenu.Item>
-		<DropdownMenu.Item
-			onSelect={async () => {
-				try {
-					await blockUser({ profileId });
-					onBlocked();
-				} catch (error) {
-					console.error(error);
-					showErrorToast({ label: "Failed to block user", error });
-				}
-			}}
-		>
-			<ProhibitIcon class="size-5" />
-			Block profile
-		</DropdownMenu.Item>
+		{#if blockable}
+			<DropdownMenu.Item
+				onSelect={async () => {
+					try {
+						await blockUser({ profileId });
+						onBlocked();
+					} catch (error) {
+						console.error(error);
+						showErrorToast({
+							label: "Failed to block user",
+							error,
+						});
+					}
+				}}
+			>
+				<ProhibitIcon class="size-5" />
+				Block profile
+			</DropdownMenu.Item>
+		{/if}
 	</DropdownMenu.Content>
 </DropdownMenu.Root>
 
-<ReportSheet bind:open={reportOpen} {profileId} {onBlocked} />
+<ReportSheet bind:open={reportOpen} {profileId} {blockable} {onBlocked} />

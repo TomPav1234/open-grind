@@ -32,6 +32,11 @@
 			isFavorite={profile.isFavorite}
 			{onFavorite}
 		/>
-		<ProfileActionsMenu {profileId} {onBlocked} {onHidden} />
+		<ProfileActionsMenu
+			{profileId}
+			blockable={profile.isBlockable !== false}
+			{onBlocked}
+			{onHidden}
+		/>
 	{/if}
 </nav>
