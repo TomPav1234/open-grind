@@ -26,6 +26,7 @@ jobs:
     env:
       CI: "true"
       NODE_OPTIONS: "--max-old-space-size=4096"
+      APPLE_DEVELOPMENT_TEAM: "1234567890"
       CODE_SIGNING_ALLOWED: "NO"
       CODE_SIGNING_REQUIRED: "NO"
       CODE_SIGN_IDENTITY: ""
@@ -35,6 +36,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Select Xcode Developer Directory
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          xcodebuild -version
+          pod --version
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -64,9 +71,13 @@ jobs:
         run: |
           bun run build
 
+      - name: Inspect Tauri Environment
+        run: |
+          bun run tauri info || true
+
       - name: Initialize Tauri iOS project
         run: |
-          bun run tauri ios init
+          bun run tauri ios init --ci || bun run tauri ios init
 
       - name: Install CocoaPods dependencies
         run: |
