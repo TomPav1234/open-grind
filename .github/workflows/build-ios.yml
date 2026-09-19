@@ -26,7 +26,7 @@ jobs:
     env:
       CI: "true"
       NODE_OPTIONS: "--max-old-space-size=4096"
-      APPLE_DEVELOPMENT_TEAM: "1234567890"
+      RUST_BACKTRACE: "1"
       CODE_SIGNING_ALLOWED: "NO"
       CODE_SIGNING_REQUIRED: "NO"
       CODE_SIGN_IDENTITY: ""
@@ -91,56 +91,41 @@ jobs:
         run: |
           bun run tauri ios init --ci || bun run tauri ios init
 
-      - name: Adjust Xcode Project Compatibility
+      - name: Configure Xcode Project for Unsigned Build
         run: |
+          # Ensure Xcode project format compatibility
           find src-tauri/gen/apple -name "project.pbxproj" -exec sed -i '' 's/objectVersion = 77;/objectVersion = 60;/g' {} + || true
+          # Switch code sign style to Manual so xcodebuild does not look for automatic provisioning profiles
+          find src-tauri/gen/apple -name "project.pbxproj" -exec sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' {} + || true
+          find src-tauri/gen/apple -name "project.pbxproj" -exec sed -i '' 's/CODE_SIGNING_REQUIRED = YES;/CODE_SIGNING_REQUIRED = NO;/g' {} + || true
+          find src-tauri/gen/apple -name "project.pbxproj" -exec sed -i '' 's/CODE_SIGN_IDENTITY = ".*";/CODE_SIGN_IDENTITY = "";/g' {} + || true
+          find src-tauri/gen/apple -name "project.pbxproj" -exec sed -i '' 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = "";/g' {} + || true
 
       - name: Build iOS App and Package IPA
         run: |
-          cd src-tauri/gen/apple
+          echo "Building iOS App using Tauri CLI with --no-sign and --ci..."
+          bun run tauri ios build -v --no-sign --ci
 
-          PROJECT=$(find . -maxdepth 1 -name "*.xcodeproj" | head -n 1)
-          WORKSPACE=$(find . -maxdepth 1 -name "*.xcworkspace" | head -n 1)
-
-          if [ -n "$WORKSPACE" ]; then
-            TARGET_FLAG="-workspace $WORKSPACE"
-            SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list -json 2>/dev/null | jq -r '.workspace.schemes[0]' 2>/dev/null)
+          # Search for IPA or app bundle produced by Tauri / Xcode
+          IPA=$(find src-tauri/gen/apple -name "*.ipa" -type f 2>/dev/null | head -n 1)
+          if [ -n "$IPA" ]; then
+            echo "Found generated IPA at: $IPA"
+            cp "$IPA" open-grind-ios.ipa
           else
-            TARGET_FLAG="-project $PROJECT"
-            SCHEME=$(xcodebuild -project "$PROJECT" -list -json 2>/dev/null | jq -r '.project.schemes[0]' 2>/dev/null)
-          fi
-
-          if [ -z "$SCHEME" ] || [ "$SCHEME" = "null" ]; then
-            SCHEME="open-grind_iOS"
-          fi
-
-          echo "Building scheme '$SCHEME' using target '$TARGET_FLAG' in release mode..."
-          xcodebuild $TARGET_FLAG \
-            -scheme "$SCHEME" \
-            -configuration release \
-            CONFIGURATION=release \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath build/DerivedData \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            PROVISIONING_PROFILE_SPECIFIER="" \
-            DEVELOPMENT_TEAM="" \
-            build
-
-          cd ../../..
-
-          APP=$(find src-tauri/gen/apple -name "*.app" -type d 2>/dev/null | head -n 1)
-          if [ -n "$APP" ]; then
-            echo "Found app bundle at: $APP. Packaging into open-grind-ios.ipa..."
-            rm -rf Payload open-grind-ios.ipa
-            mkdir -p Payload
-            cp -R "$APP" Payload/
-            zip -qr open-grind-ios.ipa Payload/
-            echo "open-grind-ios.ipa created successfully!"
-          else
-            echo "ERROR: Failed to locate or create .app bundle!"
-            exit 1
+            echo "No direct .ipa found, searching for .app bundle in .xcarchive or build directory..."
+            APP=$(find src-tauri/gen/apple -name "*.app" -type d 2>/dev/null | head -n 1)
+            if [ -n "$APP" ]; then
+              echo "Found app bundle at: $APP. Packaging into open-grind-ios.ipa..."
+              rm -rf Payload open-grind-ios.ipa
+              mkdir -p Payload
+              cp -R "$APP" Payload/
+              zip -qr open-grind-ios.ipa Payload/
+              echo "open-grind-ios.ipa created successfully!"
+            else
+              echo "ERROR: Neither .ipa nor .app bundle was found!"
+              find src-tauri/gen/apple -maxdepth 5
+              exit 1
+            fi
           fi
 
           ls -lh open-grind-ios.ipa
