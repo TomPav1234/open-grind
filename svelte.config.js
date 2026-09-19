@@ -19,31 +19,35 @@ const projectVersion = JSON.parse(
 	),
 ).version;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const cargoMetadata = JSON.parse(
-	execSync("cargo metadata --format-version 1", {
-		cwd: path.join(__dirname, "src-tauri"),
-		maxBuffer: 16 * 1024 * 1024,
-	}),
-);
-const grindrManifest = cargoMetadata.packages.find(
-	(p) => p.name === "grindr",
-)?.manifest_path;
-if (!grindrManifest)
-	throw new Error("grindr crate not found in cargo metadata");
-const headersRs = fs.readFileSync(
-	path.join(path.dirname(grindrManifest), "src", "headers.rs"),
-	"utf-8",
-);
-function scrapeHeaderConst(name) {
-	const match = headersRs.match(
-		new RegExp(`const ${name}: &str = "([^"]+)";`),
+let grindrApiVersion = "26.16.1";
+let grindrApiBuildNumber = "179451";
+try {
+	const cargoMetadata = JSON.parse(
+		execSync("cargo metadata --format-version 1", {
+			cwd: path.join(__dirname, "src-tauri"),
+			maxBuffer: 16 * 1024 * 1024,
+		}),
 	);
-	if (!match)
-		throw new Error(`${name} not found in the grindr crate headers`);
-	return match[1];
+	const grindrManifest = cargoMetadata.packages.find(
+		(p) => p.name === "grindr",
+	)?.manifest_path;
+	if (grindrManifest) {
+		const headersPath = path.join(path.dirname(grindrManifest), "src", "headers.rs");
+		if (fs.existsSync(headersPath)) {
+			const headersRs = fs.readFileSync(headersPath, "utf-8");
+			function scrapeHeaderConst(name) {
+				const match = headersRs.match(
+					new RegExp(`const ${name}: &str = "([^"]+)";`),
+				);
+				return match ? match[1] : null;
+			}
+			grindrApiVersion = scrapeHeaderConst("APP_VERSION") || grindrApiVersion;
+			grindrApiBuildNumber = scrapeHeaderConst("BUILD_NUMBER") || grindrApiBuildNumber;
+		}
+	}
+} catch (err) {
+	console.warn("Could not inspect grindr crate headers, falling back to bundled version:", err?.message || err);
 }
-const grindrApiVersion = scrapeHeaderConst("APP_VERSION");
-const grindrApiBuildNumber = scrapeHeaderConst("BUILD_NUMBER");
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
