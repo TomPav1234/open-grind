@@ -15,6 +15,7 @@ import {
 	demoAlbumContent,
 	demoAlbumShares,
 	demoMyAlbums,
+	demoReceivedAlbums,
 	demoShareAlbum,
 	demoUnshareAlbum,
 } from "./mock/albums";
@@ -247,6 +248,9 @@ export function demoRoute({
 	}
 	if (method === "GET" && rawPath === "/v1/albums") {
 		return ok(demoMyAlbums());
+	}
+	if (method === "POST" && rawPath === "/v3/pressie-albums/feed") {
+		return ok(demoReceivedAlbums());
 	}
 	if (
 		method === "POST" &&

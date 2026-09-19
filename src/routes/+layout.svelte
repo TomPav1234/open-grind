@@ -23,6 +23,7 @@
 		registerAndroidBackButtonListener,
 	} from "$lib/platform/android-native-bridge";
 	import { blockZoom } from "$lib/platform/block-zoom";
+	import { installEdgeSwipeGesture } from "$lib/platform/edge-swipe.svelte";
 	import { isAndroidPlatform } from "$lib/platform/os";
 	import { installScrollGestureBridge } from "$lib/platform/scroll-gesture";
 	import { startAddonUpdateWatch } from "$lib/updates/addon.svelte";
@@ -51,6 +52,7 @@
 		applyAndroidInsets();
 		applyBackGestureHandler();
 		const releaseZoomBlock = blockZoom();
+		const releaseEdgeSwipe = installEdgeSwipeGesture();
 		if (isAndroidPlatform()) {
 			void registerAndroidBackButtonListener().catch((error) => {
 				console.error("Failed to register back button listener", error);
@@ -62,7 +64,10 @@
 		void hydrateBackdropCompositing().catch((error: unknown) => {
 			console.error("Failed to read backdrop compositing", error);
 		});
-		return releaseZoomBlock;
+		return () => {
+			releaseZoomBlock();
+			releaseEdgeSwipe();
+		};
 	});
 
 	import { env } from "$env/dynamic/public";
@@ -74,6 +79,7 @@
 	import GoogleHandbackConfirmAlert from "$lib/components/feedback/GoogleHandbackConfirmAlert.svelte";
 	import RequestBlockedAlert from "$lib/components/feedback/RequestBlockedAlert.svelte";
 	import SessionErrorAlert from "$lib/components/feedback/SessionErrorAlert.svelte";
+	import EdgeSwipeIndicator from "$lib/components/shared/EdgeSwipeIndicator.svelte";
 	import faviconSvg from "../../contrib/logo/open-grind.svg";
 
 	let { children }: { children?: import("svelte").Snippet } = $props();
@@ -149,4 +155,5 @@
 	<CopyErrorConfirmAlert />
 	<GoogleHandbackConfirmAlert />
 	<EntitlementBypassAlert />
+	<EdgeSwipeIndicator />
 </IconContext>

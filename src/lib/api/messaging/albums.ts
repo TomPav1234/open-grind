@@ -10,6 +10,9 @@ import {
 	albumSharesResponseSchema,
 	type AlbumUnshareRequest,
 	myAlbumsResponseSchema,
+	pressieAlbumsFeedResponseSchema,
+	type PressieAlbumsFeedResponse,
+	type SharedAlbumItem,
 } from "$lib/model/messaging/albums";
 
 const albumResponseSchema = z.object({
@@ -79,4 +82,18 @@ export async function unshareAlbum({
 			})),
 		} satisfies AlbumUnshareRequest,
 	}).then((res) => res.assertOk());
+}
+
+export type ReceivedAlbumsFilterRequest = {
+	isFavorite?: boolean;
+	isOnline?: boolean;
+	onlyVideo?: boolean;
+	blur?: boolean;
+};
+
+export async function getReceivedAlbums(filters?: ReceivedAlbumsFilterRequest) {
+	return await fetchRest("/v3/pressie-albums/feed", {
+		method: "POST",
+		body: filters ?? {},
+	}).then((res) => res.jsonParsed(pressieAlbumsFeedResponseSchema));
 }

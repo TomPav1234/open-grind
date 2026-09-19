@@ -1,6 +1,9 @@
 import { addPluginListener } from "@tauri-apps/api/core";
 
-import { backGestureEventHandlers } from "$lib/platform/back-gesture-event.svelte";
+import {
+	backGestureEventHandlers,
+	runBackGestureHandlers,
+} from "$lib/platform/back-gesture-event.svelte";
 import { remeasureBottomChrome } from "$lib/util/bottom-chrome.svelte";
 
 function readEnvInset(prop: string): number {
@@ -32,13 +35,6 @@ export function applyAndroidInsets() {
 
 export function softKeyboardVisibility(): boolean | undefined {
 	return window.__AndroidInsets?.imeVisible?.();
-}
-
-function runBackGestureHandlers(): boolean {
-	for (const handler of [...backGestureEventHandlers].reverse()) {
-		if (handler() !== true) return true;
-	}
-	return false;
 }
 
 export function applyBackGestureHandler() {

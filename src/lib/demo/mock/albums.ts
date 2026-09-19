@@ -123,3 +123,59 @@ export function demoMyAlbums() {
 		}),
 	};
 }
+
+export function demoReceivedAlbums() {
+	return {
+		profileFeeds: [],
+		sharedAlbums: [
+			{
+				albumId: 900,
+				albumViewable: true,
+				albumVersion: 1,
+				expiresAt: null,
+				name: "Vacation Photos",
+				ownerProfileId: 100001,
+				imageCount: 4,
+				videoCount: 1,
+				hasUnseenContent: true,
+				coverContent: {
+					id: 1,
+					contentType: "image/jpeg",
+					location: albumCoverUrl(900),
+					status: "APPROVED",
+				},
+				profile: {
+					profileId: 100001,
+					name: "Marco",
+					profileUrl: null,
+					onlineUntil: Date.now() + 600000,
+					distanceKm: 0.8,
+				},
+			},
+			{
+				albumId: 901,
+				albumViewable: true,
+				albumVersion: 1,
+				expiresAt: null,
+				name: "Gym & Workout",
+				ownerProfileId: 100002,
+				imageCount: 6,
+				videoCount: 0,
+				hasUnseenContent: false,
+				coverContent: {
+					id: 2,
+					contentType: "image/jpeg",
+					location: albumCoverUrl(901),
+					status: "APPROVED",
+				},
+				profile: {
+					profileId: 100002,
+					name: "Alex",
+					profileUrl: null,
+					onlineUntil: Date.now() - 3600000,
+					distanceKm: 2.4,
+				},
+			},
+		],
+	};
+}
