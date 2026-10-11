@@ -24,6 +24,7 @@ import {
 	demoDeleteAlbum,
 	demoDeleteAlbumContent,
 	demoMyAlbums,
+	demoReceivedAlbums,
 	demoRenameAlbum,
 	demoReorderAlbumContent,
 	demoShareAlbum,
@@ -271,6 +272,12 @@ export function demoRoute({
 	}
 	if (method === "GET" && rawPath === "/v1/albums") {
 		return ok(demoMyAlbums());
+	}
+	if (method === "POST" && rawPath === "/v3/pressie-albums/feed") {
+		return ok(demoReceivedAlbums());
+	}
+	if (method === "POST" && rawPath === "/v3/pressie-albums/feed/paywall/") {
+		return ok({ albumPaywallContent: [] });
 	}
 	if (method === "GET" && rawPath === "/v1/albums/storage") {
 		return ok(demoAlbumStorageLimits);

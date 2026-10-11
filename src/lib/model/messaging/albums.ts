@@ -148,3 +148,74 @@ export const albumContentUploadResponseSchema = z.object({
 export const albumContentProcessingResponseSchema = z.object({
 	processing: z.boolean(),
 });
+
+export const pressieProfileMiniSchema = z.object({
+	profileId: z.int(),
+	name: z.string().nullish(),
+	profileUrl: z.string().nullish(),
+	onlineUntil: unixTimestampMsSchema.nullish(),
+	distanceKm: z.number().nullish(),
+});
+
+export type PressieProfileMini = z.infer<typeof pressieProfileMiniSchema>;
+
+export const pressieCoverContentSchema = z.object({
+	id: z.int().nullish(),
+	contentType: z.string().nullish(),
+	location: z.string().nullish(),
+	status: z.string().nullish(),
+});
+
+export type PressieCoverContent = z.infer<typeof pressieCoverContentSchema>;
+
+export const sharedAlbumItemSchema = z.object({
+	albumId: z.int(),
+	albumViewable: serverDefault({ value: z.boolean(), fallback: true }),
+	albumVersion: z.int().nullish(),
+	expiresAt: unixTimestampMsSchema.nullish(),
+	name: z.string().nullish(),
+	ownerProfileId: z.int().nullish(),
+	imageCount: serverDefault({ value: z.int(), fallback: 0 }),
+	videoCount: serverDefault({ value: z.int(), fallback: 0 }),
+	hasUnseenContent: serverDefault({ value: z.boolean(), fallback: false }),
+	coverContent: pressieCoverContentSchema.nullish(),
+	profile: pressieProfileMiniSchema.nullish(),
+	paywallUrls: z.array(z.string()).nullish(),
+});
+
+export type SharedAlbumItem = z.infer<typeof sharedAlbumItemSchema>;
+
+export const pressieAlbumsFeedResponseSchema = z.object({
+	profileFeeds: z.array(unmodeledSchema).nullish(),
+	sharedAlbums: serverDefault({
+		value: z.array(sharedAlbumItemSchema),
+		fallback: [],
+	}),
+	nonEmptyPersonalAlbumCount: z.int().nullish(),
+	emptyAlbumId: z.int().nullish(),
+});
+
+export type PressieAlbumsFeedResponse = z.infer<
+	typeof pressieAlbumsFeedResponseSchema
+>;
+
+export const albumPaywallItemSchema = z.object({
+	albumId: z.int(),
+	profile: pressieProfileMiniSchema.nullish(),
+	paywallCoverUrl: z.string().nullish(),
+	paywallUrls: z.array(z.string()).nullish(),
+	albumsItemCount: z.int().nullish(),
+});
+
+export type AlbumPaywallItem = z.infer<typeof albumPaywallItemSchema>;
+
+export const pressieAlbumsPaywallResponseSchema = z.object({
+	albumPaywallContent: serverDefault({
+		value: z.array(albumPaywallItemSchema),
+		fallback: [],
+	}),
+});
+
+export type PressieAlbumsPaywallResponse = z.infer<
+	typeof pressieAlbumsPaywallResponseSchema
+>;

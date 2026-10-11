@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { StarIcon } from "phosphor-svelte";
+	import { ImagesIcon, StarIcon } from "phosphor-svelte";
 
 	import QuickFilterButton from "$lib/components/filters/QuickFilterButton.svelte";
 	import ProgressiveBlur from "$lib/components/shared/ProgressiveBlur.svelte";
@@ -103,6 +103,17 @@
 		>
 			Position
 		</QuickFilterButton>
+		<a
+			href="/albums"
+			class={[
+				buttonVariants({ variant: "secondary", size: "sm" }),
+				"h-9 shrink-0 gap-1.5 font-semibold",
+			]}
+			aria-label="Album"
+		>
+			<ImagesIcon class="size-4" weight="bold" />
+			<span>Album</span>
+		</a>
 	</div>
 </ProgressiveBlur>
 

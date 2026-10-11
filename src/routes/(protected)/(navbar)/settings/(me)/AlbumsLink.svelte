@@ -28,7 +28,7 @@
 <Item.Root variant="outline">
 	{#snippet child({ props })}
 		<a
-			href="/settings/albums"
+			href="/albums"
 			{...props}
 			class={["rounded-full", props.class, "flex-nowrap!"]}
 		>
