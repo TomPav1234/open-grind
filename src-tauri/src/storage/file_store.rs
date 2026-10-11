@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 fn credential_path(
 	base: &std::path::Path,
@@ -144,6 +144,8 @@ impl CredentialStoreApi for FileStore {
 	}
 }
 
+static STORED_BASE: Mutex<Option<PathBuf>> = Mutex::new(None);
+
 pub fn init(base: PathBuf) {
 	use std::os::unix::fs::PermissionsExt;
 	let creds_dir = base.join("credentials");
@@ -151,8 +153,20 @@ pub fn init(base: PathBuf) {
 		let _ =
 			fs::set_permissions(&creds_dir, fs::Permissions::from_mode(0o700));
 	}
+	*STORED_BASE.lock().unwrap_or_else(PoisonError::into_inner) = Some(base.clone());
 	let store = Arc::new(FileStore { base }) as Arc<CredentialStore>;
 	keyring_core::set_default_store(store);
+}
+
+pub fn reinstall() -> bool {
+	let guard = STORED_BASE.lock().unwrap_or_else(PoisonError::into_inner);
+	if let Some(base) = guard.as_ref() {
+		let store = Arc::new(FileStore { base: base.clone() }) as Arc<CredentialStore>;
+		keyring_core::set_default_store(store);
+		true
+	} else {
+		false
+	}
 }
 
 #[cfg(test)]

@@ -10,13 +10,16 @@ export const ssr = false;
 export const csr = true;
 
 export const load: LayoutLoad = async ({ url }) => {
-	await hydrateUpdateCapability();
-	await hydrateDesktopEntryState();
+	void hydrateUpdateCapability().catch(() => {});
+	void hydrateDesktopEntryState().catch(() => {});
 	const onboardingComplete =
 		!updatesAvailableHere() ||
-		(await getPreferences()
-			.then((preferences) => preferences.onboardingComplete)
-			.catch(() => true));
+		(await Promise.race([
+			getPreferences()
+				.then((preferences) => preferences.onboardingComplete)
+				.catch(() => true),
+			new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 1500)),
+		]));
 
 	if (!onboardingComplete && url.pathname !== "/onboarding") {
 		redirect(303, "/onboarding");

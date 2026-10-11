@@ -61,9 +61,12 @@ fn open_grind_platform_plugin<R: tauri::Runtime>(
 }
 
 fn is_app_url(url: &tauri::Url) -> bool {
+	if url.as_str() == "about:blank" || url.as_str() == "about:srcdoc" {
+		return true;
+	}
 	let host = url.host_str();
 	match url.scheme() {
-		"tauri" => host == Some("localhost"),
+		"tauri" => host == Some("localhost") || host.is_none() || host == Some(""),
 		"http" | "https" => {
 			host == Some("tauri.localhost")
 				|| (cfg!(debug_assertions)
@@ -263,6 +266,13 @@ pub fn run() {
                 .cloned()
                 .collect();
             for window in deferred {
+                if let Some(existing) = app.get_webview_window(&window.label) {
+                    appearance::unlock_visual_effects(&existing);
+                    context_menu::trim_native_menu(&existing);
+                    #[cfg(desktop)]
+                    quit_when_closed(&existing);
+                    continue;
+                }
                 let builder =
                     tauri::WebviewWindowBuilder::from_config(app.handle(), &window)?
                         .user_agent(&user_agent)
@@ -292,6 +302,7 @@ pub fn run() {
 
             #[cfg(any(
                 target_os = "linux",
+                target_os = "ios",
                 all(target_os = "macos", not(feature = "keychain"))
             ))]
             storage::init_file_store(app.path().app_local_data_dir()?);

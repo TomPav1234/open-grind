@@ -3,6 +3,7 @@ use std::sync::{Mutex, PoisonError};
 mod entries;
 #[cfg(any(
 	target_os = "linux",
+	target_os = "ios",
 	all(target_os = "macos", not(feature = "keychain"))
 ))]
 mod file_store;
@@ -13,6 +14,7 @@ pub(crate) use keyring::{entry, Entry};
 
 #[cfg(any(
 	target_os = "linux",
+	target_os = "ios",
 	all(target_os = "macos", not(feature = "keychain"))
 ))]
 pub fn init_file_store(base: std::path::PathBuf) {
@@ -29,6 +31,7 @@ pub enum StorageBackend {
 
 const HAS_FILE_STORE: bool = cfg!(any(
 	target_os = "linux",
+	target_os = "ios",
 	all(target_os = "macos", not(feature = "keychain"))
 ));
 
@@ -53,12 +56,18 @@ fn cached(
 }
 
 fn probe_keyring() -> StorageBackend {
-	let backend = match install_platform_store() {
+	let mut backend = match install_platform_store() {
 		Ok(()) => StorageBackend::Keyring,
 		Err(e) if HAS_FILE_STORE => {
 			tracing::warn!(
 				"[storage] no platform keyring, keeping file store: {e}"
 			);
+			#[cfg(any(
+				target_os = "linux",
+				target_os = "ios",
+				all(target_os = "macos", not(feature = "keychain"))
+			))]
+			file_store::reinstall();
 			StorageBackend::File
 		}
 		Err(e) => {
@@ -66,19 +75,35 @@ fn probe_keyring() -> StorageBackend {
 			StorageBackend::Unavailable
 		}
 	};
-	if backend != StorageBackend::Unavailable && !round_trips() {
-		tracing::error!("[storage] the credential store failed a round trip");
-		return StorageBackend::Unavailable;
+	if backend == StorageBackend::Keyring && !round_trips() {
+		if HAS_FILE_STORE {
+			tracing::warn!(
+				"[storage] the platform keyring failed a round trip, falling back to file store"
+			);
+			#[cfg(any(
+				target_os = "linux",
+				target_os = "ios",
+				all(target_os = "macos", not(feature = "keychain"))
+			))]
+			file_store::reinstall();
+			backend = StorageBackend::File;
+		} else {
+			tracing::error!("[storage] the credential store failed a round trip");
+			return StorageBackend::Unavailable;
+		}
 	}
 	backend
 }
 
 #[cfg(target_os = "ios")]
 fn install_platform_store() -> Result<(), String> {
-	let store = apple_native_keyring_store::protected::Store::new()
-		.map_err(|e| e.to_string())?;
-	keyring_core::set_default_store(store);
-	Ok(())
+	std::panic::catch_unwind(|| {
+		let store = apple_native_keyring_store::protected::Store::new()
+			.map_err(|e| e.to_string())?;
+		keyring_core::set_default_store(store);
+		Ok(())
+	})
+	.unwrap_or_else(|_| Err("panic during apple keyring store initialization".to_string()))
 }
 
 #[cfg(target_os = "android")]
@@ -126,13 +151,16 @@ pub fn storage_backend(
 }
 
 fn round_trips() -> bool {
-	let Ok(entry) = entry("startup-probe") else {
-		return false;
-	};
-	let ok = entry.set_secret(b"ok").is_ok()
-		&& entry.get_secret().is_ok_and(|secret| secret == b"ok");
-	let _ = entry.delete_credential();
-	ok
+	std::panic::catch_unwind(|| {
+		let Ok(entry) = entry("startup-probe") else {
+			return false;
+		};
+		let ok = entry.set_secret(b"ok").is_ok()
+			&& entry.get_secret().is_ok_and(|secret| secret == b"ok");
+		let _ = entry.delete_credential();
+		ok
+	})
+	.unwrap_or(false)
 }
 
 #[cfg(all(
