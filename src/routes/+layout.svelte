@@ -25,6 +25,7 @@
 	} from "$lib/platform/android-native-bridge";
 	import { blockNativeMenu } from "$lib/platform/block-native-menu";
 	import { blockZoom } from "$lib/platform/block-zoom";
+	import { installEdgeSwipeGesture } from "$lib/platform/edge-swipe.svelte";
 	import { trackHoverPointer } from "$lib/platform/hover-pointer";
 	import { keepLinksInApp } from "$lib/platform/in-app-links";
 	import { isAndroidPlatform } from "$lib/platform/os";
@@ -65,6 +66,7 @@
 		const releaseNativeMenuBlock = blockNativeMenu();
 		const releaseHoverPointer = trackHoverPointer();
 		const releaseInAppLinks = keepLinksInApp();
+		const releaseEdgeSwipe = installEdgeSwipeGesture();
 		if (isAndroidPlatform()) {
 			void registerAndroidBackButtonListener().catch((error) => {
 				console.error("Failed to register back button listener", error);
@@ -81,6 +83,7 @@
 			releaseNativeMenuBlock();
 			releaseHoverPointer();
 			releaseInAppLinks();
+			releaseEdgeSwipe();
 		};
 	});
 
@@ -93,6 +96,7 @@
 	import GoogleHandoffConfirmAlert from "$lib/components/feedback/GoogleHandoffConfirmAlert.svelte";
 	import RequestBlockedAlert from "$lib/components/feedback/RequestBlockedAlert.svelte";
 	import SessionErrorAlert from "$lib/components/feedback/SessionErrorAlert.svelte";
+	import EdgeSwipeIndicator from "$lib/components/shared/EdgeSwipeIndicator.svelte";
 	import FrostFilters from "$lib/components/shared/FrostFilters.svelte";
 	import faviconSvg from "../../contrib/logo/open-grind.svg";
 
@@ -186,4 +190,5 @@
 	<CopyErrorConfirmAlert />
 	<GoogleHandoffConfirmAlert />
 	<EntitlementBypassAlert />
+	<EdgeSwipeIndicator />
 </IconContext>

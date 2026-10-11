@@ -104,7 +104,7 @@ export function softKeyboardHidden({
 	});
 }
 
-function runBackGestureHandlers(): boolean {
+export function runBackGestureHandlers(): boolean {
 	for (const handler of [...backGestureEventHandlers].reverse()) {
 		if (handler() !== true) return true;
 	}
