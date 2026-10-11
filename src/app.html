@@ -109,6 +109,39 @@
 				} catch (e) {}
 			})();
 		</script>
+		<script>
+			window.addEventListener("error", function (e) {
+				var div = document.getElementById("debug-error-banner");
+				if (!div) {
+					div = document.createElement("div");
+					div.id = "debug-error-banner";
+					div.style.cssText =
+						"position:fixed;bottom:0;left:0;right:0;max-height:50vh;overflow:auto;background:rgba(200,0,0,0.95);color:white;padding:12px;font-family:monospace;font-size:12px;z-index:999999;word-break:break-all;";
+					(document.body || document.documentElement).appendChild(div);
+				}
+				div.innerText +=
+					"\n[Error] " +
+					(e.message || e.error || e) +
+					" at " +
+					(e.filename || "") +
+					":" +
+					(e.lineno || "");
+			});
+			window.addEventListener("unhandledrejection", function (e) {
+				var div = document.getElementById("debug-error-banner");
+				if (!div) {
+					div = document.createElement("div");
+					div.id = "debug-error-banner";
+					div.style.cssText =
+						"position:fixed;bottom:0;left:0;right:0;max-height:50vh;overflow:auto;background:rgba(200,0,0,0.95);color:white;padding:12px;font-family:monospace;font-size:12px;z-index:999999;word-break:break-all;";
+					(document.body || document.documentElement).appendChild(div);
+				}
+				div.innerText +=
+					"\n[UnhandledRejection] " +
+					(e.reason && (e.reason.stack || e.reason.message || e.reason)) ||
+					e;
+			});
+		</script>
 		%sveltekit.head%
 	</head>
 

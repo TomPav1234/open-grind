@@ -68,9 +68,10 @@ fn is_app_url(url: &tauri::Url) -> bool {
 	match url.scheme() {
 		"tauri" => host == Some("localhost") || host.is_none() || host == Some(""),
 		"http" | "https" => {
-			host == Some("tauri.localhost")
-				|| (cfg!(debug_assertions)
-					&& matches!(host, Some("localhost") | Some("127.0.0.1")))
+			matches!(
+				host,
+				Some("tauri.localhost") | Some("localhost") | Some("127.0.0.1")
+			)
 		}
 		_ => false,
 	}
@@ -130,6 +131,10 @@ fn quit_when_closed(window: &tauri::WebviewWindow) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+	std::panic::set_hook(Box::new(|info| {
+		eprintln!("[PANIC] {}", info);
+	}));
+
 	#[cfg(target_os = "linux")]
 	appearance::apply_environment_defaults();
 
@@ -269,6 +274,19 @@ pub fn run() {
                 if let Some(existing) = app.get_webview_window(&window.label) {
                     appearance::unlock_visual_effects(&existing);
                     context_menu::trim_native_menu(&existing);
+                    #[cfg(target_os = "ios")]
+                    {
+                        let _ = existing.with_webview(|webview| {
+                            use objc2::{msg_send, sel};
+                            let obj: &objc2::runtime::AnyObject = unsafe { &*webview.inner().cast() };
+                            let setter = sel!(setInspectable:);
+                            unsafe {
+                                if msg_send![obj, respondsToSelector: setter] {
+                                    let _: () = msg_send![obj, setInspectable: true];
+                                }
+                            }
+                        });
+                    }
                     #[cfg(desktop)]
                     quit_when_closed(&existing);
                     continue;
@@ -281,11 +299,30 @@ pub fn run() {
                 let builder = builder.extensions_path(
                     app.path().resource_dir()?.join(media::WEBKIT_EXTENSIONS),
                 );
-                let window = builder.build()?;
+                let window = match builder.build() {
+                    Ok(w) => w,
+                    Err(e) => {
+                        eprintln!("[setup] window build failed for {}: {e}", window.label);
+                        continue;
+                    }
+                };
                 #[cfg(target_os = "linux")]
                 media::serve_element_opens(&window);
                 appearance::unlock_visual_effects(&window);
                 context_menu::trim_native_menu(&window);
+                #[cfg(target_os = "ios")]
+                {
+                    let _ = window.with_webview(|webview| {
+                        use objc2::{msg_send, sel};
+                        let obj: &objc2::runtime::AnyObject = unsafe { &*webview.inner().cast() };
+                        let setter = sel!(setInspectable:);
+                        unsafe {
+                            if msg_send![obj, respondsToSelector: setter] {
+                                let _: () = msg_send![obj, setInspectable: true];
+                            }
+                        }
+                    });
+                }
                 #[cfg(desktop)]
                 quit_when_closed(&window);
             }
@@ -305,7 +342,13 @@ pub fn run() {
                 target_os = "ios",
                 all(target_os = "macos", not(feature = "keychain"))
             ))]
-            storage::init_file_store(app.path().app_local_data_dir()?);
+            {
+                let data_dir = app
+                    .path()
+                    .app_local_data_dir()
+                    .unwrap_or_else(|_| std::env::temp_dir().join("open-grind"));
+                storage::init_file_store(data_dir);
+            }
 
             app.manage(storage::init_keyring());
 
