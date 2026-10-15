@@ -4,6 +4,7 @@
 		"iOS": {
 			"bundleVersion": "1.0.0",
 			"infoPlist": "Info.ios.plist"
+			"identifier": "org.opengrind.tompav"
 		}
 	}
 }
