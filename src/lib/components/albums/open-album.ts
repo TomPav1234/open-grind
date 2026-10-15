@@ -1,11 +1,11 @@
 import "photoswipe/style.css";
+import { toast } from "svelte-sonner";
 
 import { showErrorToast } from "$lib/api/error-toast";
 import {
 	type AlbumContentResponse,
 	getAlbumContent,
 } from "$lib/api/messaging/albums";
-import type { SharedAlbumItem } from "$lib/model/messaging/albums";
 import { now } from "$lib/util/clock";
 import { proxyMediaUrl } from "$lib/util/media";
 import {
@@ -19,6 +19,7 @@ import {
 	applyPhotoSwipeVideo,
 	applyPhotoSwipeViewportSync,
 } from "$lib/util/photoswipe";
+import type { SharedAlbumItem } from "$lib/model/messaging/albums";
 
 type LoadedAlbum = AlbumContentResponse & {
 	content: (AlbumContentResponse["content"][number] & MediaDimensions)[];
@@ -45,26 +46,31 @@ export async function openAlbumLightbox(
 						...album,
 						content: await Promise.all(
 							album.content.map(async (slide) => {
-								const kind = slide.contentType.startsWith("video/")
+								const kind = slide.contentType.startsWith(
+									"video/",
+								)
 									? "video"
 									: "image";
 								const rawUrl = slide.url || slide.thumbUrl;
 								const url = proxyMediaUrl(rawUrl, { as: kind });
 								const coverUrl = proxyMediaUrl(slide.coverUrl);
-								const measurable = { video: coverUrl, image: url }[kind];
-								let dims: MediaDimensions = { width: 800, height: 1000 };
+								const measurable = {
+									video: coverUrl,
+									image: url,
+								}[kind];
+								let dims: MediaDimensions = {
+									width: 800,
+									height: 1000,
+								};
 								try {
 									dims =
 										measurable === null
 											? await measureVideo(url)
 											: await measureImage(measurable);
-								} catch {}
-								return {
-									...slide,
-									url,
-									coverUrl,
-									...dims,
-								};
+								} catch {
+									/* ignore dimension error */
+								}
+								return { ...slide, url, coverUrl, ...dims };
 							}),
 						),
 					};
@@ -77,19 +83,28 @@ export async function openAlbumLightbox(
 
 		// If album has no content (e.g. old / expired album or 403 / paywalled past limit), check fallbackAlbum
 		if (!loaded || loaded.content.length === 0) {
-			const fallbackSlides: (AlbumContentResponse["content"][number] & MediaDimensions)[] = [];
+			const fallbackSlides: (AlbumContentResponse["content"][number] &
+				MediaDimensions)[] = [];
 
-			if (fallbackAlbum?.paywallUrls && fallbackAlbum.paywallUrls.length > 0) {
+			if (
+				fallbackAlbum?.paywallUrls &&
+				fallbackAlbum.paywallUrls.length > 0
+			) {
 				for (let i = 0; i < fallbackAlbum.paywallUrls.length; i++) {
 					const rawUrl = fallbackAlbum.paywallUrls[i];
 					if (!rawUrl) continue;
-					const isVideo = rawUrl.includes(".mp4") || rawUrl.includes("/video");
+					const isVideo =
+						rawUrl.includes(".mp4") || rawUrl.includes("/video");
 					const kind = isVideo ? "video" : "image";
 					const url = proxyMediaUrl(rawUrl, { as: kind });
 					let dims: MediaDimensions = { width: 800, height: 1000 };
 					try {
-						dims = isVideo ? await measureVideo(url) : await measureImage(url);
-					} catch {}
+						dims = isVideo
+							? await measureVideo(url)
+							: await measureImage(url);
+					} catch {
+						/* ignore dimension error */
+					}
 					fallbackSlides.push({
 						contentId: i + 1,
 						contentType: isVideo ? "video/mp4" : "image/jpeg",
@@ -111,8 +126,12 @@ export async function openAlbumLightbox(
 				const url = proxyMediaUrl(rawUrl, { as: kind });
 				let dims: MediaDimensions = { width: 800, height: 1000 };
 				try {
-					dims = isVideo ? await measureVideo(url) : await measureImage(url);
-				} catch {}
+					dims = isVideo
+						? await measureVideo(url)
+						: await measureImage(url);
+				} catch {
+					/* ignore dimension error */
+				}
 				fallbackSlides.push({
 					contentId: 1,
 					contentType: isVideo ? "video/mp4" : "image/jpeg",
@@ -142,11 +161,12 @@ export async function openAlbumLightbox(
 		}
 
 		if (!loaded || loaded.content.length === 0) {
-			showErrorToast({ label: "L'album è vuoto" });
+			toast.error("L'album è vuoto");
 			return;
 		}
 
-		const { default: PhotoSwipeLightbox } = await import("photoswipe/lightbox");
+		const { default: PhotoSwipeLightbox } =
+			await import("photoswipe/lightbox");
 		const lightbox = new PhotoSwipeLightbox({
 			showHideAnimationType: "fade",
 			pswpModule: () => import("photoswipe"),
@@ -159,11 +179,7 @@ export async function openAlbumLightbox(
 		lightbox.addFilter("itemData", (itemData, index) => {
 			const slide = loaded.content[index];
 			if (slide === undefined) return itemData;
-			return {
-				src: slide.url,
-				width: slide.width,
-				height: slide.height,
-			};
+			return { src: slide.url, width: slide.width, height: slide.height };
 		});
 		applyPhotoSwipeBackGesture(lightbox);
 		applyPhotoSwipeVideo(lightbox, (index) => {

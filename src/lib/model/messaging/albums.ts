@@ -1,7 +1,7 @@
 import z from "zod";
 
 import { mediaUrlSchema } from "$lib/model/media";
-import { knownValueOrNull } from "$lib/model/tolerance";
+import { knownValueOrNull, serverDefault } from "$lib/model/tolerance";
 import { unixTimestampMsSchema, unmodeledSchema } from "$lib/model/types";
 
 export const albumPreviewSchema = z.object({
